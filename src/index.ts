@@ -213,5 +213,19 @@ export type {
 
 export { renderStaleTsIgnoreReport } from './commands/stale-ts-ignore/report.js'
 
+export {
+  runFullCheck,
+  FULL_CHECK_COMMAND_NAMES,
+  SLOW_FULL_CHECK_COMMAND,
+} from './commands/full-check/run.js'
+export type {
+  FullCheckCommandName,
+  FullCheckCommandResult,
+  FullCheckRunOptions,
+  FullCheckReport,
+} from './commands/full-check/run.js'
+
+export { renderFullCheckReport } from './commands/full-check/report.js'
+
 export { walk } from './utils/walk.js'
 export type { WalkOptions } from './utils/walk.js'

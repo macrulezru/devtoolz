@@ -127,16 +127,26 @@ looking for is never touched.
   `.vue` files get an isolated per-file check (same technique as
   `readme-check`'s own virtual-file typechecking) — a plain
   `ts.Program` can't include `.vue` in a whole-project run at all.
+- **`full-check`** — runs all twelve other commands in one sweep, each in
+  its own safe read-only mode — the three that can write to disk
+  (`strip-comments`/`console-strip`/`case-check`) are always called as a
+  preview, `-y`/`--fix` are never passed. One summary table: which
+  commands are clean, which found something, which errored. Since
+  `stale-ts-ignore` is the one command that can make a bare `full-check`
+  noticeably slower, running it with no flags in a real terminal asks
+  first — `--skip stale-ts-ignore` skips both the question and the
+  command, `--no-prompt` runs everything without asking (the default
+  answer either way).
 
 `strip-comments`, `console-strip`, and `case-check` share the same safety
 model: `--dry-run` (or just running with neither `--dry-run` nor `-y`)
 only previews, `-y`/`--yes` is required to actually write anything,
 `--diff` shows a real unified diff per file. `dead-exports`,
 `unused-deps`, `circular-imports`, `exports-doctor`, `readme-check`,
-`empty-catch`, `todo-report`, `scripts-check`, `orphan-tests`, and
-`stale-ts-ignore` are all read-only — none of them ever write anything,
-there's nothing to preview or apply. Every command supports `--json` for
-machine-readable output.
+`empty-catch`, `todo-report`, `scripts-check`, `orphan-tests`,
+`stale-ts-ignore`, and `full-check` are all read-only — none of them ever
+write anything, there's nothing to preview or apply. Every command
+supports `--json` for machine-readable output.
 
 ## Tone
 
@@ -199,6 +209,9 @@ devtoolz scripts-check                         # package.json scripts vs README/
 devtoolz orphan-tests src                      # test files whose source disappeared
 
 devtoolz stale-ts-ignore                       # find @ts-ignore comments suppressing nothing
+
+devtoolz full-check                            # run every command, one summary table
+devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
 ```
 
 Every command has built-in `--help` — `devtoolz --help` lists every
@@ -380,6 +393,27 @@ Checked 1 @ts-ignore directive.
 
 1 stale @ts-ignore found:
   src/example.ts:2  @ts-ignore  doesn't suppress anything — the line below it typechecks cleanly without it
+```
+
+`devtoolz full-check` against a small package with a few real, unrelated
+problems scattered across it:
+
+```
+✖ strip-comments    1 found
+✔ console-strip     clean
+✖ dead-exports      1 found
+✔ case-check        clean
+✔ exports-doctor    clean
+✔ readme-check      clean
+✔ unused-deps       clean
+✔ circular-imports  clean
+✖ empty-catch       1 found
+✔ todo-report       clean
+✖ scripts-check     3 found
+✔ orphan-tests      clean
+✔ stale-ts-ignore   clean
+
+9 clean, 4 found something — see `devtoolz <command> --help` for full detail on any of them.
 ```
 
 ## Development

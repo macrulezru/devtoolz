@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { resolve } from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { runStripComments } from './commands/strip-comments/run.js'
 import { renderStripCommentsReport } from './commands/strip-comments/report.js'
 import { runConsoleStrip } from './commands/console-strip/run.js'
@@ -28,6 +29,12 @@ import { runOrphanTests } from './commands/orphan-tests/run.js'
 import { renderOrphanTestsReport } from './commands/orphan-tests/report.js'
 import { runStaleTsIgnore } from './commands/stale-ts-ignore/run.js'
 import { renderStaleTsIgnoreReport } from './commands/stale-ts-ignore/report.js'
+import {
+  runFullCheck,
+  FULL_CHECK_COMMAND_NAMES,
+  SLOW_FULL_CHECK_COMMAND,
+} from './commands/full-check/run.js'
+import { renderFullCheckReport } from './commands/full-check/report.js'
 
 interface HelpRow {
   indent: number
@@ -903,6 +910,110 @@ program
           quiet: options.quiet,
           plain: options.plain,
         })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+// Only `full-check` ever prompts — every other command here is a single,
+// fast, non-interactive check. `stale-ts-ignore` is the one command a
+// bare `full-check` can turn into a genuinely slow run, so this asks
+// about that ONE command specifically, not a general "run everything?"
+// confirmation. Defaults to running it (Enter alone picks option 1) —
+// matches what happens when there's no TTY to ask at all (see
+// `shouldPrompt` below), so a script and an interactive "just press
+// enter" run behave the same way.
+// Deliberately a SINGLE `question()` call, no retry-on-invalid-input loop
+// — found via real testing that a second `question()` on the same (or
+// even a fresh) `readline/promises` interface can silently lose the
+// answer and hang forever once more than one line was already available
+// on stdin when the first question resolved (a real, reproducible
+// readline quirk with piped/non-interactive input, not something specific
+// to this code). One question, with an explicit default on anything else
+// typed, sidesteps the whole bug class instead of risking it.
+async function promptStaleTsIgnoreChoice(): Promise<boolean> {
+  process.stderr.write(
+    'stale-ts-ignore runs a full project typecheck twice — this can take noticeably longer than the other commands on a large project.\n\n' +
+      '  1) Run it anyway (full sweep)\n' +
+      '  2) Skip it for this run\n\n',
+  )
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  let answer: string
+  try {
+    answer = (await rl.question('Choice [1/2, Enter = 1]: ')).trim()
+  } finally {
+    rl.close()
+  }
+  if (answer === '2') return false
+  if (answer !== '' && answer !== '1') {
+    process.stderr.write(`(didn't recognize "${answer}" — running it, same as Enter)\n`)
+  }
+  return true
+}
+
+program
+  .command('full-check')
+  .description(
+    'Runs every other command in its own safe/read-only mode — a full diagnostic sweep, never applies a fix',
+  )
+  .argument('[dir]', 'directory every command scans/reads from', '.')
+  .option(
+    '--skip <command>',
+    `skip a command by name (repeatable) — valid names: ${FULL_CHECK_COMMAND_NAMES.join(', ')}`,
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option(
+    '--no-prompt',
+    "don't ask about stale-ts-ignore even in an interactive terminal — runs it unless --skip already excludes it",
+  )
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    async (
+      dir: string,
+      options: {
+        skip: string[]
+        prompt: boolean
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const skip = new Set(options.skip)
+
+      const shouldPrompt =
+        options.prompt &&
+        !options.json &&
+        !skip.has(SLOW_FULL_CHECK_COMMAND) &&
+        Boolean(process.stdin.isTTY) &&
+        Boolean(process.stdout.isTTY)
+
+      if (shouldPrompt) {
+        const runIt = await promptStaleTsIgnoreChoice()
+        if (!runIt) skip.add(SLOW_FULL_CHECK_COMMAND)
+        process.stderr.write('\n')
+      }
+
+      const showProgress = !options.json && !options.quiet
+      const report = runFullCheck({
+        dir: resolve(dir),
+        skip: [...skip],
+        ...(showProgress
+          ? {
+              onCommandStart: (command: string) => process.stderr.write(`Running ${command}...\n`),
+              onProgress: (message: string) => process.stderr.write(`${message}\n`),
+            }
+          : {}),
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderFullCheckReport(report, { quiet: options.quiet, plain: options.plain })
         if (text) console.log(text)
       }
 
