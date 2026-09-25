@@ -1,0 +1,54 @@
+{
+  "name": "@macrulez/devtoolz",
+  "version": "0.1.0",
+  "description": "A small toolbox of CLI commands that automate routine dev chores — strip comments/console.log, find dead exports, catch case-sensitivity import bugs before Linux CI does",
+  "type": "module",
+  "license": "MIT",
+  "author": "macrulez <macrulezru@gmail.com> (https://macrulez.ru/en)",
+  "homepage": "https://github.com/macrulezru/devtoolz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macrulezru/devtoolz.git"
+  },
+  "bugs": {
+    "url": "https://github.com/macrulezru/devtoolz/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "devtoolz": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write ."
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "diff": "^7.0.0",
+    "ignore": "^6.0.2",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/diff": "^6.0.0",
+    "@types/node": "^20.14.0",
+    "eslint": "^9.20.0",
+    "prettier": "^3.9.8",
+    "tsx": "^4.19.2",
+    "typescript-eslint": "^8.23.0",
+    "vitest": "^3.0.5"
+  }
+}
