@@ -13,7 +13,7 @@
 // guesses wrong.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const BUILD_DIR_NAMES = new Set(['dist', 'build', 'lib', 'out'])
 const SOURCE_EXTENSIONS = ['.ts', '.tsx']
@@ -79,16 +79,4 @@ export function resolvePublicEntries(packageDir: string, extraEntries: string[] 
   }
 
   return [...entries]
-}
-
-// Exposed only so entry.ts doesn't need a second "does this dir have a
-// package.json" check duplicated in core.ts.
-export function findNearestPackageDir(startDir: string): string | null {
-  let dir = resolve(startDir)
-  for (;;) {
-    if (existsSync(join(dir, 'package.json'))) return dir
-    const parent = dirname(dir)
-    if (parent === dir) return null
-    dir = parent
-  }
 }

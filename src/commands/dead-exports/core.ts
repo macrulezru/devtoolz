@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { analyzeFile, type FileAnalysis } from './parse.js'
-import { resolveRelativeSpecifier } from './resolve.js'
+import { analyzeFile, type FileAnalysis } from '../../utils/parse-module.js'
+import { resolveRelativeSpecifier } from '../../utils/resolve-specifier.js'
 import { resolvePublicEntries } from './entry.js'
-import type { WorkspaceInfo } from './workspace.js'
+import type { WorkspaceInfo } from '../../utils/workspace.js'
 
 export interface DeadExportFinding {
   name: string

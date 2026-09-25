@@ -1,8 +1,9 @@
 import { relative } from 'node:path'
 import { walk } from '../../utils/walk.js'
 import { analyzeDeadExports, type DeadExportFinding } from './core.js'
-import { findNearestPackageDir, resolvePublicEntries } from './entry.js'
-import { detectWorkspace } from './workspace.js'
+import { resolvePublicEntries } from './entry.js'
+import { findNearestPackageDir } from '../../utils/find-package-dir.js'
+import { detectWorkspace } from '../../utils/workspace.js'
 
 const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
 

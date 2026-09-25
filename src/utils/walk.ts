@@ -18,7 +18,26 @@ const ignore = require('ignore') as (options?: IgnoreOptions) => Ignore
 // Every dev-toolz command that scans a tree agrees on this default —
 // listed once here instead of copy-pasted per command. `--ignore` (per
 // command) adds to this, it never has to re-list these.
-const DEFAULT_IGNORES = ['node_modules', 'dist', 'build', '.git', 'coverage']
+//
+// `.nuxt`/`.output`/`.next` — real dogfooding against vue-image-kit's
+// `demo-nuxt/` (2026-09-25, empty-catch) found minified build output
+// getting scanned as real source, producing nonsense findings at
+// column 138282 in a single-line bundle. `.gitignore` support alone
+// doesn't catch this: it only reads the root `<cwd>/.gitignore`, not a
+// nested project's own one (`demo-nuxt` here has its own, several
+// levels down) — so a framework's own well-known build-output
+// directory name needs to be a hardcoded default, the same as
+// `dist`/`build` already are, not left to `.gitignore` to catch.
+const DEFAULT_IGNORES = [
+  'node_modules',
+  'dist',
+  'build',
+  '.git',
+  'coverage',
+  '.nuxt',
+  '.output',
+  '.next',
+]
 
 export interface WalkOptions {
   cwd: string

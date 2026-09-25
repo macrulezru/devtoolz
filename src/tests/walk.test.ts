@@ -42,6 +42,16 @@ describe('walk', () => {
     expect(files).toEqual([join(root, 'src/real.ts')])
   })
 
+  it('skips .nuxt/.output/.next build-output directories by default — even a nested one without its own .gitignore reachable from cwd', () => {
+    write('demo-nuxt/.nuxt/types/nuxt.d.ts', '')
+    write('demo-nuxt/.output/server/chunk.mjs', '')
+    write('demo-app/.next/static/chunk.js', '')
+    write('src/real.ts', '')
+
+    const files = walk(['.'], { cwd: root, extensions: ['.ts', '.js', '.mjs'] })
+    expect(files).toEqual([join(root, 'src/real.ts')])
+  })
+
   it('honors the real .gitignore at cwd root', () => {
     write('.gitignore', 'ignored-dir/\n')
     write('ignored-dir/a.ts', '')

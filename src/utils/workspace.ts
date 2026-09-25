@@ -3,7 +3,9 @@
 // `@macrulez/inview-core`, as it really does) doesn't read as a false
 // "dead export" just because the reference lives in a different package
 // directory than the one being checked — the exact case features.md's
-// contract calls out.
+// contract calls out. Shared by every command that needs to reason about
+// a package relative to its workspace (dead-exports, unused-deps) — not
+// specific to either one.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
