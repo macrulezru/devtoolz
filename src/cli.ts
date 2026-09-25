@@ -7,12 +7,27 @@ import { runConsoleStrip } from './commands/console-strip/run.js'
 import { renderConsoleStripReport } from './commands/console-strip/report.js'
 import { runDeadExports } from './commands/dead-exports/run.js'
 import { renderDeadExportsReport } from './commands/dead-exports/report.js'
+import { runCircularImports } from './commands/circular-imports/run.js'
+import { renderCircularImportsReport } from './commands/circular-imports/report.js'
+import { runUnusedDeps } from './commands/unused-deps/run.js'
+import { renderUnusedDepsReport } from './commands/unused-deps/report.js'
 import { runCaseCheck } from './commands/case-check/run.js'
 import { renderCaseCheckReport } from './commands/case-check/report.js'
 import { runExportsDoctor } from './commands/exports-doctor/run.js'
 import { renderExportsDoctorReport } from './commands/exports-doctor/report.js'
 import { runReadmeCheck } from './commands/readme-check/run.js'
 import { renderReadmeCheckReport } from './commands/readme-check/report.js'
+import { runEmptyCatch } from './commands/empty-catch/run.js'
+import { renderEmptyCatchReport } from './commands/empty-catch/report.js'
+import { runTodoReport } from './commands/todo-report/run.js'
+import { renderTodoReportReport } from './commands/todo-report/report.js'
+import { DEFAULT_TAGS } from './commands/todo-report/core.js'
+import { runScriptsCheck } from './commands/scripts-check/run.js'
+import { renderScriptsCheckReport } from './commands/scripts-check/report.js'
+import { runOrphanTests } from './commands/orphan-tests/run.js'
+import { renderOrphanTestsReport } from './commands/orphan-tests/report.js'
+import { runStaleTsIgnore } from './commands/stale-ts-ignore/run.js'
+import { renderStaleTsIgnoreReport } from './commands/stale-ts-ignore/report.js'
 
 interface HelpRow {
   indent: number
@@ -352,6 +367,126 @@ program
   )
 
 program
+  .command('circular-imports')
+  .description('Find import cycles in the local module graph (A -> B -> ... -> A)')
+  .argument('[paths...]', 'files/directories to process', [])
+  .option('--cwd <path>', 'root paths are resolved against', process.cwd())
+  .option('--ext <list>', 'comma-separated extensions to include', '.ts,.tsx,.js,.jsx,.cjs,.mjs')
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
+  .option(
+    '--include-types',
+    'also report cycles made entirely of `import type` edges (harmless at runtime by default, so hidden)',
+    false,
+  )
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (
+      paths: string[],
+      options: {
+        cwd: string
+        ext: string
+        ignore: string[]
+        respectGitignore: boolean
+        includeTypes: boolean
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const report = runCircularImports({
+        paths,
+        cwd: resolve(options.cwd),
+        extensions: options.ext.split(',').map((e) => e.trim()),
+        ignoreGlobs: options.ignore,
+        respectGitignore: options.respectGitignore,
+        includeTypes: options.includeTypes,
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderCircularImportsReport(report, {
+          quiet: options.quiet,
+          plain: options.plain,
+        })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('unused-deps')
+  .description(
+    'Find package.json dependencies nothing imports, and imports of packages package.json never declared',
+  )
+  .argument('[dir]', 'package directory to check — also the scan root', '.')
+  .option('--ext <list>', 'comma-separated extensions to include', '.ts,.tsx,.js,.jsx,.cjs,.mjs')
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
+  .option(
+    '--strict',
+    'also check packages that are structurally undetectable as "used" (currently: @types/*)',
+    false,
+  )
+  .option(
+    '--ignore-package <name>',
+    'exempt a specific dependency from the unused/phantom check (repeatable)',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (
+      dir: string,
+      options: {
+        ext: string
+        ignore: string[]
+        respectGitignore: boolean
+        strict: boolean
+        ignorePackage: string[]
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const report = runUnusedDeps({
+        dir: resolve(dir),
+        extensions: options.ext.split(',').map((e) => e.trim()),
+        ignoreGlobs: options.ignore,
+        respectGitignore: options.respectGitignore,
+        strict: options.strict,
+        ignorePackages: options.ignorePackage,
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderUnusedDepsReport(report, { quiet: options.quiet, plain: options.plain })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
   .command('case-check')
   .description(
     "Find imports whose case doesn't match the real file on disk — works on Windows/Mac, breaks on Linux CI",
@@ -487,6 +622,287 @@ program
         console.log(JSON.stringify(report, null, 2))
       } else {
         const text = renderReadmeCheckReport(report, { quiet: options.quiet, plain: options.plain })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('empty-catch')
+  .description(
+    'Find catch blocks that do nothing with the error, or only log it — both silently swallow it',
+  )
+  .argument('[paths...]', 'files/directories to process', [])
+  .option('--cwd <path>', 'root paths are resolved against', process.cwd())
+  .option(
+    '--ext <list>',
+    'comma-separated extensions to include',
+    '.ts,.tsx,.js,.jsx,.cjs,.mjs,.vue',
+  )
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (
+      paths: string[],
+      options: {
+        cwd: string
+        ext: string
+        ignore: string[]
+        respectGitignore: boolean
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const report = runEmptyCatch({
+        paths,
+        cwd: resolve(options.cwd),
+        extensions: options.ext.split(',').map((e) => e.trim()),
+        ignoreGlobs: options.ignore,
+        respectGitignore: options.respectGitignore,
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderEmptyCatchReport(report, { quiet: options.quiet, plain: options.plain })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('todo-report')
+  .description(
+    'Summarize TODO/FIXME/HACK comments across the project — file:line + the text itself',
+  )
+  .argument('[paths...]', 'files/directories to process', [])
+  .option('--cwd <path>', 'root paths are resolved against', process.cwd())
+  .option(
+    '--ext <list>',
+    'comma-separated extensions to include',
+    '.ts,.tsx,.js,.jsx,.cjs,.mjs,.vue',
+  )
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
+  .option('--tags <list>', 'comma-separated tags to look for', DEFAULT_TAGS.join(','))
+  .option(
+    '--max <n>',
+    "don't fail unless findings exceed this count (a ratchet, not a hard zero)",
+    '0',
+  )
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (
+      paths: string[],
+      options: {
+        cwd: string
+        ext: string
+        ignore: string[]
+        respectGitignore: boolean
+        tags: string
+        max: string
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const report = runTodoReport({
+        paths,
+        cwd: resolve(options.cwd),
+        extensions: options.ext.split(',').map((e) => e.trim()),
+        ignoreGlobs: options.ignore,
+        respectGitignore: options.respectGitignore,
+        tags: options.tags.split(',').map((t) => t.trim()),
+        max: Number(options.max),
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderTodoReportReport(report, { quiet: options.quiet, plain: options.plain })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('scripts-check')
+  .description(
+    "Cross-checks package.json's scripts against README/docs and .github/workflows — a mention of a script that doesn't exist, and (weaker signal) a script nothing documents",
+  )
+  .argument('[dir]', 'package directory to check', '.')
+  .option(
+    '--file <path>',
+    'markdown/doc file to check, relative to [dir] (repeatable) — default: README.md',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (dir: string, options: { file: string[]; json: boolean; quiet: boolean; plain: boolean }) => {
+      const report = runScriptsCheck({ dir: resolve(dir), files: options.file })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderScriptsCheckReport(report, {
+          quiet: options.quiet,
+          plain: options.plain,
+        })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('orphan-tests')
+  .description(
+    'Finds test files whose source disappeared — renamed or deleted, test still green, testing nothing real anymore. Reliable only under a co-located (X.test.ts next to X.ts) or --source-dir/--test-dir mirrored naming convention',
+  )
+  .argument('[paths...]', 'files/directories to process (co-located mode only)', [])
+  .option('--cwd <path>', 'root paths are resolved against', process.cwd())
+  .option(
+    '--ext <list>',
+    'comma-separated extensions to consider as possible test files',
+    '.ts,.tsx,.js,.jsx,.mjs,.cjs',
+  )
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
+  .option('--test-suffix <list>', 'comma-separated suffixes that mark a test file', '.test,.spec')
+  .option(
+    '--source-ext <list>',
+    'comma-separated extensions tried for a matching source file',
+    '.ts,.tsx,.js,.jsx,.mjs,.cjs,.vue',
+  )
+  .option(
+    '--source-dir <path>',
+    'mirrored layout: source root, relative to --cwd (must be given together with --test-dir)',
+  )
+  .option(
+    '--test-dir <path>',
+    'mirrored layout: test root, relative to --cwd (must be given together with --source-dir)',
+  )
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (
+      paths: string[],
+      options: {
+        cwd: string
+        ext: string
+        ignore: string[]
+        respectGitignore: boolean
+        testSuffix: string
+        sourceExt: string
+        sourceDir?: string
+        testDir?: string
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const report = runOrphanTests({
+        paths,
+        cwd: resolve(options.cwd),
+        extensions: options.ext.split(',').map((e) => e.trim()),
+        ignoreGlobs: options.ignore,
+        respectGitignore: options.respectGitignore,
+        testSuffixes: options.testSuffix.split(',').map((s) => s.trim()),
+        sourceExtensions: options.sourceExt.split(',').map((e) => e.trim()),
+        ...(options.sourceDir ? { sourceDir: options.sourceDir } : {}),
+        ...(options.testDir ? { testDir: options.testDir } : {}),
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderOrphanTestsReport(report, { quiet: options.quiet, plain: options.plain })
+        if (text) console.log(text)
+      }
+
+      process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('stale-ts-ignore')
+  .description(
+    "Finds a `// @ts-ignore` that no longer suppresses anything — the code below it was fixed, the comment wasn't removed. Runs a full project typecheck twice, so it's the most expensive command here",
+  )
+  .argument('[dir]', 'package directory to check', '.')
+  .option(
+    '--tsconfig <path>',
+    'tsconfig.json to read compiler options from (auto-detected by default)',
+  )
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults — applies to .vue file discovery only',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore for .vue discovery")
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    (
+      dir: string,
+      options: {
+        tsconfig?: string
+        ignore: string[]
+        respectGitignore: boolean
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      const report = runStaleTsIgnore({
+        dir: resolve(dir),
+        ...(options.tsconfig ? { tsconfig: options.tsconfig } : {}),
+        ignoreGlobs: options.ignore,
+        respectGitignore: options.respectGitignore,
+        ...(options.quiet ? {} : { onProgress: (message: string) => console.error(message) }),
+      })
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2))
+      } else {
+        const text = renderStaleTsIgnoreReport(report, {
+          quiet: options.quiet,
+          plain: options.plain,
+        })
         if (text) console.log(text)
       }
 

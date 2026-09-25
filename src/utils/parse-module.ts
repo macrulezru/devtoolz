@@ -1,6 +1,8 @@
 // Per-file extraction of exports/imports via a real TS parse — no regex
 // guessing at `export`/`import` keywords, so a string/comment containing
-// those words is never mistaken for the real thing.
+// those words is never mistaken for the real thing. Shared by every
+// command that needs a file's import/export surface (dead-exports,
+// circular-imports, unused-deps) — not specific to any one of them.
 
 import ts from 'typescript'
 
@@ -27,6 +29,8 @@ export interface ImportedName {
   /** the name as exported by the source module, 'default', or '*' for a namespace import */
   imported: string
   isType: boolean
+  /** 1-based line of the import declaration itself, for commands that report on the import site */
+  line: number
 }
 
 export interface FileAnalysis {
@@ -152,13 +156,14 @@ export function analyzeFile(text: string, file: string): FileAnalysis {
     if (ts.isImportDeclaration(stmt) && ts.isStringLiteral(stmt.moduleSpecifier)) {
       const from = stmt.moduleSpecifier.text
       const clause = stmt.importClause
+      const line = lineOf(stmt)
       if (!clause) continue // bare `import './x'` — side-effect only, not a usage of any named export
 
-      if (clause.name) imports.push({ from, imported: 'default', isType: clause.isTypeOnly })
+      if (clause.name) imports.push({ from, imported: 'default', isType: clause.isTypeOnly, line })
 
       if (clause.namedBindings) {
         if (ts.isNamespaceImport(clause.namedBindings)) {
-          imports.push({ from, imported: '*', isType: clause.isTypeOnly })
+          imports.push({ from, imported: '*', isType: clause.isTypeOnly, line })
         } else if (ts.isNamedImports(clause.namedBindings)) {
           for (const el of clause.namedBindings.elements) {
             const importedName = (el.propertyName ?? el.name).text
@@ -166,6 +171,7 @@ export function analyzeFile(text: string, file: string): FileAnalysis {
               from,
               imported: importedName,
               isType: clause.isTypeOnly || el.isTypeOnly,
+              line,
             })
           }
         }
@@ -210,7 +216,7 @@ export function analyzeFile(text: string, file: string): FileAnalysis {
         // A literal path we can resolve — conservatively treat the whole
         // target module as used (see core.ts) rather than trying to trace
         // which bindings a `const { x } = await import(...)` destructures.
-        imports.push({ from: arg.text, imported: '*', isType: false })
+        imports.push({ from: arg.text, imported: '*', isType: false, line: lineOf(node) })
       } else {
         hasUnresolvableDynamicImport = true
       }

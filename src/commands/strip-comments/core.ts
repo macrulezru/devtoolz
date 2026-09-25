@@ -16,69 +16,7 @@
 
 import ts from 'typescript'
 import { applyDeletions, collapseBlankLineRuns, type Range } from './apply-deletions.js'
-
-const LITERAL_KINDS = new Set<ts.SyntaxKind>([
-  ts.SyntaxKind.StringLiteral,
-  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
-  ts.SyntaxKind.TemplateHead,
-  ts.SyntaxKind.TemplateMiddle,
-  ts.SyntaxKind.TemplateTail,
-  ts.SyntaxKind.RegularExpressionLiteral,
-  ts.SyntaxKind.JsxText,
-])
-
-function findLiteralRanges(sf: ts.SourceFile): Range[] {
-  const ranges: Range[] = []
-  function visit(node: ts.Node): void {
-    if (LITERAL_KINDS.has(node.kind)) {
-      ranges.push([node.getStart(sf), node.getEnd()])
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(sf)
-  return ranges
-}
-
-function maskLiterals(text: string, ranges: Range[]): string {
-  // `ts.SourceFile` positions are UTF-16 CODE UNIT offsets (same as
-  // `string.length`/`charAt`) — `[...text]`/`Array.from(text)` iterate by
-  // CODE POINT instead, collapsing any surrogate pair (an emoji, or any
-  // character outside the BMP) into a single array element. The moment a
-  // literal masked earlier in the file contains one, every position after
-  // it drifts by one (or more) index, and later deletions land on the
-  // wrong bytes entirely. `split('')` is UTF-16-code-unit based — it
-  // splits a surrogate pair into its two halves instead of merging them,
-  // which is exactly what keeps this array's indices aligned with the
-  // parser's.
-  const chars = text.split('')
-  for (const [s, e] of ranges) {
-    for (let i = s; i < e; i++) {
-      if (chars[i] !== '\n') chars[i] = 'x'
-    }
-  }
-  return chars.join('')
-}
-
-function findCommentRanges(maskedText: string): Range[] {
-  const ranges: Range[] = []
-  const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest,
-    false,
-    ts.LanguageVariant.Standard,
-    maskedText,
-  )
-  let tok = scanner.scan()
-  while (tok !== ts.SyntaxKind.EndOfFileToken) {
-    if (
-      tok === ts.SyntaxKind.SingleLineCommentTrivia ||
-      tok === ts.SyntaxKind.MultiLineCommentTrivia
-    ) {
-      ranges.push([scanner.getTokenStart(), scanner.getTokenEnd()])
-    }
-    tok = scanner.scan()
-  }
-  return ranges
-}
+import { findCommentRanges } from '../../utils/find-comments.js'
 
 // Every `/** ... */` immediately leading an `export`-modified declaration
 // — these are what `keepJsdoc` protects from deletion. Only JSDoc-style
@@ -129,9 +67,7 @@ export function stripComments(
   const scriptKind = options.scriptKind ?? ts.ScriptKind.TS
   const sf = ts.createSourceFile('f.ts', text, ts.ScriptTarget.Latest, true, scriptKind)
 
-  const literalRanges = findLiteralRanges(sf)
-  const masked = maskLiterals(text, literalRanges)
-  let comments = findCommentRanges(masked)
+  let comments = findCommentRanges(text, sf)
   if (comments.length === 0) return { text, changed: false, count: 0 }
 
   if (options.keepJsdoc) {

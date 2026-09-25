@@ -24,8 +24,13 @@ function tryFile(path: string): string | null {
  * if nothing matches any of the conventions this project's commands rely
  * on elsewhere (extensionless imports, NodeNext `.js`-means-`.ts`,
  * directory-with-index). Only ever called with specifiers that already
- * look relative (`.`/`..`-prefixed) — bare package specifiers go through
- * workspace.ts instead.
+ * look relative (`.`/`..`-prefixed) — bare package specifiers are a
+ * separate concern (see utils/workspace.ts for the one case that needs
+ * to resolve those, to a sibling workspace package).
+ *
+ * Shared by every command that walks a local import graph
+ * (dead-exports, circular-imports, unused-deps) — not specific to any
+ * one of them.
  */
 export function resolveRelativeSpecifier(fromFile: string, specifier: string): string | null {
   const base = resolve(dirname(fromFile), specifier)

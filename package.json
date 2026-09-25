@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/devtoolz",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small toolbox of CLI commands that automate routine dev chores — strip comments/console.log, find dead exports, catch case-sensitivity import bugs before Linux CI does",
   "type": "module",
   "license": "MIT",

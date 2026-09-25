@@ -37,6 +37,23 @@ looking for is never touched.
   symbol is really declared, and auto-detects a pnpm/npm/yarn workspace
   so a sibling package importing your export doesn't read as dead either.
   `--strict` checks the entry points too, for when you actually want that.
+- **`unused-deps`** — finds `package.json` dependencies nothing imports,
+  and the reverse: a package genuinely imported but never declared (a
+  "phantom" dependency, working only because something else hoisted it
+  into `node_modules`). Knows about the usual ways a dependency is used
+  without ever being imported — invoked from `scripts`/`lint-staged` by
+  its bin name, referenced as a string or bare key in a config file
+  (`vitest.config.ts`'s `environment: 'happy-dom'`,
+  `postcss.config.js`'s `plugins: { autoprefixer: {} }`) — plus a small,
+  explicit list of packages no static analysis could ever catch
+  (`@types/*`, `typescript`, `@vitest/coverage-*`, `postcss`/`sass`).
+  `--strict` checks that last list too, for a manual audit.
+- **`circular-imports`** — finds import cycles (`A → B → … → A`) in your
+  own code — the kind that can silently produce `undefined` at module
+  load time in ESM. Reports every cycle found, not just the first, as
+  its full chain. A cycle made entirely of `import type` is harmless at
+  runtime (types are erased) and hidden by default — `--include-types`
+  shows those too, clearly marked.
 - **`case-check`** — finds imports whose case doesn't match the real
   file on disk. Windows and macOS are case-insensitive by default, so
   `import './foo'` against a real `Foo.ts` works fine right up until it
@@ -64,13 +81,62 @@ looking for is never touched.
   dropped rather than reported as noise (see `--help`/features.md for
   exactly which). `--lang` opts into `tsx`/`js`/`jsx` (default: `ts`
   only — `tsx` needs the package to actually configure JSX itself).
+- **`empty-catch`** — finds `catch` blocks that do nothing with the
+  error, or do so little it's effectively swallowed: fully empty, or a
+  body that's nothing but `console.*` calls with no `throw`, no write to
+  an outer-scope variable, no meaningful `return`. Syntactically valid
+  code that ordinary lint rules can't catch — needs a semantic check, not
+  a syntactic one. A comment inside the block (found via a real token
+  scan, not text matching) exempts the finding, same principle as
+  ESLint's `no-empty` for documented empty blocks. Handles `.vue` files.
+- **`todo-report`** — summarizes `TODO`/`FIXME`/`HACK` comments across
+  the project — file:line plus the note's actual text, including one
+  wrapped across several `//` lines or a multi-line `/* */` block, joined
+  back into one readable line. `--tags` configures the list (default
+  `TODO,FIXME,HACK`); `--max <n>` turns the default "fail on any finding"
+  into a ratchet for a project that's knowingly living with existing
+  debt. Handles `.vue` files, including `<!-- -->` template comments.
+- **`scripts-check`** — cross-checks `package.json`'s `scripts` against
+  README/docs and `.github/workflows/*.yml`: a mentioned-but-undeclared
+  script (`npm run X`, `npm test`/`start`, `yarn`/`pnpm run X`) is a
+  real broken link — renamed a script, forgot to update the docs or CI —
+  and, as a weaker signal, a declared script nothing documents. npm's
+  own reserved lifecycle names (`prepublishOnly`,
+  `preinstall`, `postinstall`, `prepare`, any `pre*`/`post*` for another
+  declared script) are exempt from the second direction — npm calls
+  those itself. A CI step under its own `working-directory:` (a `demo/`
+  subproject, say) is understood to belong to a different `package.json`
+  entirely, not flagged against this one's.
+- **`orphan-tests`** — finds test files whose source disappeared —
+  renamed or deleted, the test still green, testing nothing real
+  anymore. Reliable only under a simple naming convention: co-located
+  (`Foo.test.ts` next to `Foo.ts`, including a sibling `__tests__`/`tests`
+  directory one level down), or an explicit `--source-dir`/`--test-dir`
+  mirror. A scenario/integration test with no single corresponding source
+  file is a known false positive under that strict rule — `--ignore`
+  is the documented way to exclude it, not something this command tries
+  to guess.
+- **`stale-ts-ignore`** — finds a `// @ts-ignore` that no longer
+  suppresses anything: the code below it was fixed, the comment wasn't
+  removed. There's no compiler API for "was this specific directive
+  needed" — this runs a real project-wide typecheck twice (once as-is,
+  once with every directive masked out) and compares the delta at each
+  directive's own line, so it's the most expensive command here, and
+  says so up front when there's real work to do. Skips the expensive
+  part entirely when there's not a single `@ts-ignore` in the project.
+  `.vue` files get an isolated per-file check (same technique as
+  `readme-check`'s own virtual-file typechecking) — a plain
+  `ts.Program` can't include `.vue` in a whole-project run at all.
 
 `strip-comments`, `console-strip`, and `case-check` share the same safety
 model: `--dry-run` (or just running with neither `--dry-run` nor `-y`)
 only previews, `-y`/`--yes` is required to actually write anything,
-`--diff` shows a real unified diff per file. `dead-exports` is read-only,
-it never writes anything — there's nothing to preview. Every command
-supports `--json` for machine-readable output.
+`--diff` shows a real unified diff per file. `dead-exports`,
+`unused-deps`, `circular-imports`, `exports-doctor`, `readme-check`,
+`empty-catch`, `todo-report`, `scripts-check`, `orphan-tests`, and
+`stale-ts-ignore` are all read-only — none of them ever write anything,
+there's nothing to preview or apply. Every command supports `--json` for
+machine-readable output.
 
 ## Tone
 
@@ -109,6 +175,11 @@ devtoolz console-strip src -y
 
 devtoolz dead-exports src                      # report-only, nothing to apply
 
+devtoolz unused-deps                           # package.json deps vs what's actually imported
+devtoolz unused-deps path/to/package --strict   # also check @types/*, typescript, etc.
+
+devtoolz circular-imports src                  # find import cycles (A -> B -> ... -> A)
+
 devtoolz case-check src --fix --diff --dry-run # preview a case fix
 devtoolz case-check src --fix -y               # apply it
 
@@ -117,6 +188,17 @@ devtoolz exports-doctor path/to/package         # or a specific package director
 
 devtoolz readme-check                          # typecheck ts blocks in ./README.md
 devtoolz readme-check --file docs/guide.md      # check another doc instead/as well
+
+devtoolz empty-catch src                       # find catch blocks that swallow the error
+
+devtoolz todo-report src                       # summarize TODO/FIXME/HACK comments
+devtoolz todo-report src --max 20              # ratchet: fail only once findings exceed 20
+
+devtoolz scripts-check                         # package.json scripts vs README/CI mentions
+
+devtoolz orphan-tests src                      # test files whose source disappeared
+
+devtoolz stale-ts-ignore                       # find @ts-ignore comments suppressing nothing
 ```
 
 Every command has built-in `--help` — `devtoolz --help` lists every
@@ -175,6 +257,33 @@ Scanned 3 files.
   src/types.ts:1    Options       (type)
 ```
 
+`devtoolz unused-deps` against a package with one truly unused dependency
+and one phantom (imported but never declared):
+
+```
+🧰 devtoolz, reporting for duty
+
+Scanned 1 file.
+
+2 problems found:
+  phantom  dotenv    resolves from C:\tmp\demo-pkg\node_modules\dotenv — not declared in package.json
+  unused   left-pad  (dependencies, not imported anywhere)
+```
+
+`devtoolz circular-imports src` against two files that import each other:
+
+```
+🧰 devtoolz — chores, automated
+
+Scanned 2 files.
+
+1 circular import found:
+
+  src/order.ts
+  → src/user.ts
+  → src/order.ts
+```
+
 `devtoolz case-check src --fix --diff --dry-run` after a file got renamed
 `Helper.ts` → `helper.ts` on someone's Mac, with the import never updated:
 
@@ -219,6 +328,58 @@ Typechecked 1 code block across 1 file.
 
 1 problem found:
   README.md:6:7  ts  Type 'string' is not assignable to type 'number'.
+```
+
+`devtoolz empty-catch src` against a `catch` block that only logs the
+error and never rethrows or handles it:
+
+```
+Scanned 1 file.
+
+1 problem found:
+  src/example.ts:4:5  console-only  only logged, never handled — silently swallowed either way
+```
+
+`devtoolz todo-report src` against a `TODO` wrapped across several `//`
+lines — joined back into one readable note, not cut off mid-sentence:
+
+```
+Scanned 1 file.
+
+1 comment found (TODO: 1):
+  src/example.ts:9:4  TODO  TODO: replace the hardcoded timeout below with a value read from config once loadConfig() above actually works end to end
+```
+
+`devtoolz scripts-check` against a package whose README has a typo'd
+script name, and two real scripts nothing documents:
+
+```
+Checked 1 source against package.json's scripts.
+
+3 problems found:
+  README.md:4     buld    mentioned here, but not in package.json scripts
+  package.json:4  build   in package.json scripts, but not mentioned anywhere checked
+  package.json:6  deploy  in package.json scripts, but not mentioned anywhere checked
+```
+
+`devtoolz orphan-tests src` after `parseQuery.ts` was renamed/removed but
+its test survived:
+
+```
+Scanned 3 files.
+
+1 orphan test found:
+  src/parseQuery.test.ts  orphan  no matching source found (tried .ts, .tsx, .js, .jsx, .mjs, .cjs, .vue)
+```
+
+`devtoolz stale-ts-ignore` against a `@ts-ignore` above a line that
+typechecks cleanly on its own — the code was fixed, the comment wasn't:
+
+```
+Checked 1 @ts-ignore directive.
+
+1 stale @ts-ignore found:
+  src/example.ts:2  @ts-ignore  doesn't suppress anything — the line below it typechecks cleanly without it
 ```
 
 ## Development

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { checkMarkdownFile, type ReadmeCheckFinding, type ReadmeCheckFileResult } from './core.js'
-import { loadCompilerOptions } from './tsconfig.js'
+import { loadTsconfig } from '../../utils/load-tsconfig.js'
 import { DEFAULT_LANGS } from './lang.js'
 
 export interface ReadmeCheckRunOptions {
@@ -28,9 +28,14 @@ export function runReadmeCheck(options: ReadmeCheckRunOptions): ReadmeCheckRepor
   const targetFiles = options.files && options.files.length > 0 ? options.files : ['README.md']
   const langs = options.langs && options.langs.length > 0 ? options.langs : DEFAULT_LANGS
 
-  const loaded = loadCompilerOptions(packageDir, options.tsconfig)
+  const loaded = loadTsconfig(packageDir, options.tsconfig)
   if ('error' in loaded) {
-    return { fileResults: [], findings: [], error: loaded.error, exitCode: 1 }
+    return {
+      fileResults: [],
+      findings: [],
+      error: `${loaded.error} — nothing to typecheck README code blocks against`,
+      exitCode: 1,
+    }
   }
 
   const fileResults: ReadmeCheckFileResult[] = []
