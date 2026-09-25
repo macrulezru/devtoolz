@@ -16,6 +16,9 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "devtoolz": "dist/cli.js"
   },
