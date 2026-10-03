@@ -14,12 +14,15 @@ import {
   formatAggregate,
   parseAggregate,
   parseComponents,
+  parseExtensions,
   parseFileList,
+  splitPathArguments,
   parseTypes,
   resolveComponents,
   type HashEntry,
 } from '../commands/image-hash/core.js'
 import type { SharpFactory } from '../commands/image-hash/sharp-loader.js'
+import { splitList } from '../utils/split-list.js'
 
 type CreateImage = (options: unknown) => {
   toFile(path: string): Promise<unknown>
@@ -41,6 +44,20 @@ describe('image-hash parsing helpers', () => {
     expect(parseTypes('all')).toEqual(['blurhash', 'thumbhash', 'color', 'preview'])
     expect(() => parseTypes('blurhash,md5')).toThrow(ImageHashUsageError)
     expect(() => parseTypes(' , ')).toThrow(ImageHashUsageError)
+  })
+
+  it('accepts lists separated by commas, spaces or both, as PowerShell passes them', () => {
+    expect(parseTypes('blurhash thumbhash color')).toEqual(['blurhash', 'thumbhash', 'color'])
+    expect(parseTypes('blurhash, color')).toEqual(['blurhash', 'color'])
+    expect(parseExtensions('.jpg .png,webp')).toEqual(['.jpg', '.png', '.webp'])
+    expect(splitList('a b,c  d')).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('splits space-joined path arguments only when every part is a real path', () => {
+    const exists = (p: string) => ['a.jpg', 'b.png', 'my photo.jpg'].includes(p)
+    expect(splitPathArguments(['a.jpg b.png'], exists)).toEqual(['a.jpg', 'b.png'])
+    expect(splitPathArguments(['my photo.jpg'], exists)).toEqual(['my photo.jpg'])
+    expect(splitPathArguments(['a.jpg missing.png'], exists)).toEqual(['a.jpg missing.png'])
   })
 
   it('picks blurhash components by aspect ratio when asked to', () => {
@@ -454,6 +471,15 @@ describe('image-hash command line', () => {
     expect(plain.stdout).not.toContain(String.fromCharCode(27))
     const colored = cli(['img', '-t', 'color', '--dry-run', '--color'])
     expect(colored.stdout).toContain(String.fromCharCode(27))
+  })
+
+  it('takes a space-separated type list and paths, as PowerShell passes comma lists', () => {
+    const result = cli(['img/red.jpg img/blue.png', '-t', 'blurhash color'])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(Object.keys(parsed)).toEqual(['img/blue.png', 'img/red.jpg'])
+    expect(parsed['img/red.jpg'].blurhash).toBeDefined()
+    expect(parsed['img/red.jpg'].color).toBeDefined()
   })
 
   it('reads the path list from stdin with --files-from -', () => {
