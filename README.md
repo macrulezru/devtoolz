@@ -136,8 +136,13 @@ looking for is never touched.
   file per image (`photo.jpg` → `photo.jpg.blurhash.txt`, with
   `--suffix` and `--out-ext` to rename). Formats: `json`, `plain` (just
   the hash text, no newline), `csv`, and `ts`/`js` modules you can import
-  straight into the app. `--dry-run` writes nothing and shows the result
-  as a table instead. Uses the native `sharp` library, which devtoolz
+  straight into the app. Besides the two hashes it can produce the
+  dominant color and a tiny PNG preview (`-t all`), accepts `http(s)`
+  URLs and path lists from a file or stdin, and can keep an output file in
+  sync: `--cache` skips unchanged images, `--update --prune` merges into
+  the existing file, `--check` fails with exit code 1 when it is stale
+  (made for CI). `--dry-run` writes nothing and shows the result as a
+  table instead. Uses the native `sharp` library, which devtoolz
   offers to install on first use — see Requirements.
 - **`full-check`** — runs all twelve other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
@@ -247,6 +252,8 @@ devtoolz image-hash a.jpg,b.png,photos -r -t blurhash -f csv -o hashes.csv
 devtoolz image-hash public/img -r -f plain --per-file   # photo.jpg.blurhash.txt + photo.jpg.thumbhash.txt
 devtoolz image-hash public/img -r -f ts -t thumbhash -o src/placeholders.ts --name placeholders
 devtoolz image-hash public/img -r --dry-run        # write nothing, show a table of the hashes
+devtoolz image-hash public/img -r -t all --components auto -o hashes.json --cache --update --prune
+devtoolz image-hash public/img -r -o hashes.json --check   # CI: exit 1 if hashes.json is stale
 
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
