@@ -1,7 +1,9 @@
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 
-export type HashType = 'blurhash' | 'thumbhash'
+export type HashType = 'blurhash' | 'thumbhash' | 'color' | 'preview'
+
+export const ALL_TYPES: HashType[] = ['blurhash', 'thumbhash', 'color', 'preview']
 
 export const OUTPUT_FORMATS = ['json', 'plain', 'csv', 'ts', 'js'] as const
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number]
@@ -21,6 +23,9 @@ export const DEFAULT_EXPORT_NAME = 'imageHashes'
 export const DEFAULT_BLURHASH_COMPONENTS = { x: 4, y: 3 }
 export const DEFAULT_SAMPLE_SIZE = 100
 export const MAX_SAMPLE_SIZE = 100
+export const DEFAULT_CACHE_FILE = '.devtoolz-image-hash-cache.json'
+
+export type Components = { x: number; y: number } | 'auto'
 
 export class ImageHashUsageError extends Error {}
 
@@ -30,6 +35,8 @@ export interface HashEntry {
   height: number
   blurhash?: string
   thumbhash?: string
+  color?: string
+  preview?: string
 }
 
 export interface OutputUnit {
@@ -38,10 +45,36 @@ export interface OutputUnit {
 }
 
 export function parseTypes(value: string): HashType[] {
-  const normalized = value.trim().toLowerCase()
-  if (normalized === 'both') return ['blurhash', 'thumbhash']
-  if (normalized === 'blurhash' || normalized === 'thumbhash') return [normalized]
-  throw new ImageHashUsageError(`--type must be blurhash, thumbhash or both (got "${value}")`)
+  const names = value
+    .split(',')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean)
+  const selected = new Set<HashType>()
+  for (const name of names) {
+    if (name === 'both') {
+      selected.add('blurhash')
+      selected.add('thumbhash')
+    } else if (name === 'all') {
+      ALL_TYPES.forEach((type) => selected.add(type))
+    } else if ((ALL_TYPES as string[]).includes(name)) {
+      selected.add(name as HashType)
+    } else {
+      throw new ImageHashUsageError(
+        `--type takes a comma-separated list of ${ALL_TYPES.join(', ')}, or both / all (got "${value}")`,
+      )
+    }
+  }
+  if (selected.size === 0) {
+    throw new ImageHashUsageError(
+      '--type needs at least one of blurhash, thumbhash, color, preview',
+    )
+  }
+  return ALL_TYPES.filter((type) => selected.has(type))
+}
+
+export function orderTypes(types: Iterable<HashType>): HashType[] {
+  const set = new Set(types)
+  return ALL_TYPES.filter((type) => set.has(type))
 }
 
 export function parseFormat(value: string): OutputFormat {
@@ -55,16 +88,33 @@ export function parseFormat(value: string): OutputFormat {
   return found
 }
 
-export function parseComponents(value: string): { x: number; y: number } {
+export function parseComponents(value: string): Components {
+  if (value.trim().toLowerCase() === 'auto') return 'auto'
   const match = /^(\d+)x(\d+)$/i.exec(value.trim())
   const x = match ? Number(match[1]) : 0
   const y = match ? Number(match[2]) : 0
   if (!match || x < 1 || x > 9 || y < 1 || y > 9) {
     throw new ImageHashUsageError(
-      `--components must look like 4x3, each side from 1 to 9 (got "${value}")`,
+      `--components must look like 4x3 (each side from 1 to 9) or be "auto" (got "${value}")`,
     )
   }
   return { x, y }
+}
+
+export function resolveComponents(
+  components: Components,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  if (components !== 'auto') return components
+  const aspect = width >= height ? width / height : height / width
+  const long = 4
+  const short = Math.min(4, Math.max(2, Math.round(long / Math.sqrt(aspect))))
+  return width >= height ? { x: long, y: short } : { x: short, y: long }
+}
+
+export function componentsLabel(components: Components): string {
+  return components === 'auto' ? 'auto' : `${components.x}x${components.y}`
 }
 
 export function parseSampleSize(value: string): number {
@@ -75,6 +125,16 @@ export function parseSampleSize(value: string): number {
     )
   }
   return size
+}
+
+export function parseMaxPixels(value: string): number {
+  const pixels = Number(value)
+  if (!Number.isInteger(pixels) || pixels < 0) {
+    throw new ImageHashUsageError(
+      `--max-pixels must be a whole number, 0 for no limit (got "${value}")`,
+    )
+  }
+  return pixels
 }
 
 export function parseExtensions(value: string): string[] {
@@ -96,13 +156,17 @@ export function validateExportName(name: string): string {
   return name
 }
 
+export function isUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value)
+}
+
 export function splitPathArguments(
   args: string[],
   exists: (path: string) => boolean = existsSync,
 ): string[] {
   const out: string[] = []
   for (const arg of args) {
-    if (exists(arg) || !arg.includes(',')) {
+    if (isUrl(arg) || exists(arg) || !arg.includes(',')) {
       out.push(arg)
       continue
     }
@@ -112,6 +176,13 @@ export function splitPathArguments(
     }
   }
   return out
+}
+
+export function parseFileList(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'))
 }
 
 export function defaultOutExtension(format: OutputFormat): string {
@@ -131,10 +202,10 @@ export function validateSuffix(
   format: OutputFormat,
 ) {
   const resolved = suffix ?? '.{type}'
-  if (format === 'plain' && types.length === 2 && !resolved.includes('{type}')) {
+  if (format === 'plain' && types.length > 1 && !resolved.includes('{type}')) {
     throw new ImageHashUsageError(
-      '--suffix must contain {type} when --format plain writes both hashes per image, ' +
-        'otherwise the two files would overwrite each other',
+      '--suffix must contain {type} when --format plain writes several hashes per image, ' +
+        'otherwise the files would overwrite each other',
     )
   }
   return resolved
@@ -147,8 +218,8 @@ function csvField(value: string): string {
 function structured(entry: HashEntry, types: HashType[]): Record<string, string | number> {
   const out: Record<string, string | number> = { width: entry.width, height: entry.height }
   for (const type of types) {
-    const hash = entry[type]
-    if (hash !== undefined) out[type] = hash
+    const value = entry[type]
+    if (value !== undefined) out[type] = value
   }
   return out
 }
@@ -197,7 +268,7 @@ export function formatPerFile(
   if (format === 'plain') {
     return types.map((type) => ({ token: type, content: entry[type] ?? '' }))
   }
-  const token = types.length === 2 ? 'hash' : (types[0] as HashType)
+  const token = types.length > 1 ? 'hash' : (types[0] as HashType)
   const object = structured(entry, types)
   if (format === 'csv') {
     return [{ token, content: `${csvHeader(types, false)}\n${csvRow(entry, types, false)}\n` }]
@@ -215,4 +286,80 @@ export function outputFileName(
   extension: string,
 ): string {
   return `${basename(imagePath)}${suffix.replace(/\{type\}/g, token)}${extension}`
+}
+
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i] as string
+    if (quoted) {
+      if (char === '"' && line[i + 1] === '"') {
+        current += '"'
+        i++
+      } else if (char === '"') {
+        quoted = false
+      } else {
+        current += char
+      }
+    } else if (char === '"') {
+      quoted = true
+    } else if (char === ',') {
+      fields.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  fields.push(current)
+  return fields
+}
+
+function entryFromRecord(file: string, record: Record<string, unknown>): HashEntry {
+  const entry: HashEntry = {
+    file,
+    width: Number(record.width) || 0,
+    height: Number(record.height) || 0,
+  }
+  for (const type of ALL_TYPES) {
+    const value = record[type]
+    if (typeof value === 'string' && value !== '') entry[type] = value
+  }
+  return entry
+}
+
+export function parseAggregate(content: string, format: OutputFormat): HashEntry[] {
+  const fail = (): never => {
+    throw new ImageHashUsageError(
+      'could not read the existing output file for --update; it must be a file this command ' +
+        'generated (json, ts, js or csv), not reformatted by hand or by Prettier',
+    )
+  }
+  if (format === 'plain') {
+    throw new ImageHashUsageError('--update works with --format json, ts, js or csv, not plain')
+  }
+  if (format === 'csv') {
+    const lines = content.split(/\r?\n/).filter((line) => line !== '')
+    const header = parseCsvLine(lines[0] ?? '')
+    if (header[0] !== 'file') return fail()
+    return lines.slice(1).map((line) => {
+      const fields = parseCsvLine(line)
+      const record: Record<string, unknown> = {}
+      header.forEach((name, i) => (record[name] = fields[i]))
+      return entryFromRecord(fields[0] as string, record)
+    })
+  }
+  let body = content.trim()
+  if (format !== 'json') {
+    const match = /^[^{]*(\{[\s\S]*\})\s*(?:as\s+const)?\s*;?\s*$/.exec(body)
+    if (!match) return fail()
+    body = match[1] as string
+  }
+  try {
+    const parsed = JSON.parse(body) as Record<string, Record<string, unknown>>
+    return Object.entries(parsed).map(([file, record]) => entryFromRecord(file, record))
+  } catch {
+    return fail()
+  }
 }

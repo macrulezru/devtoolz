@@ -322,6 +322,7 @@ describe('loadSharp', () => {
   function deps(overrides: Partial<SharpLoaderDeps>): SharpLoaderDeps {
     return {
       resolveBundled: () => null,
+      resolveFromCwd: () => null,
       resolveManaged: () => null,
       install: () => true,
       confirm: async () => true,
@@ -343,6 +344,27 @@ describe('loadSharp', () => {
       }),
     )
     expect(result).toBe(fake)
+    expect(asked).toBe(false)
+  })
+
+  it('finds a sharp installed in the project the command runs in, before offering an install', async () => {
+    let asked = false
+    const seen: string[] = []
+    const result = await loadSharp(
+      { cwd: '/my/project' },
+      deps({
+        resolveFromCwd: (cwd) => {
+          seen.push(cwd)
+          return fake
+        },
+        confirm: async () => {
+          asked = true
+          return true
+        },
+      }),
+    )
+    expect(result).toBe(fake)
+    expect(seen).toEqual(['/my/project'])
     expect(asked).toBe(false)
   })
 

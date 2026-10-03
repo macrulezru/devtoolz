@@ -23,18 +23,28 @@ export interface SharpImage {
     fit: 'inside'
     withoutEnlargement: boolean
   }): SharpImage
+  toColourspace(colourspace: string): SharpImage
   ensureAlpha(): SharpImage
   raw(): SharpImage
+  png(options?: { compressionLevel?: number }): SharpImage
+  toBuffer(): Promise<Uint8Array>
   toBuffer(options: { resolveWithObject: true }): Promise<RawImage>
 }
 
+export interface SharpInputOptions {
+  failOn?: 'none' | 'truncated'
+  limitInputPixels?: number | false
+  raw?: { width: number; height: number; channels: 4 }
+}
+
 export interface SharpFactory {
-  (input: string, options?: { failOn?: 'none' }): SharpImage
+  (input: string | Uint8Array, options?: SharpInputOptions): SharpImage
   cache?: (options: boolean) => unknown
 }
 
 export interface SharpLoaderDeps {
   resolveBundled: () => SharpFactory | null
+  resolveFromCwd: (cwd: string) => SharpFactory | null
   resolveManaged: () => SharpFactory | null
   install: () => boolean
   confirm: (question: string) => Promise<boolean>
@@ -82,6 +92,7 @@ async function askYesNo(question: string): Promise<boolean> {
 export function defaultSharpLoaderDeps(): SharpLoaderDeps {
   return {
     resolveBundled: () => tryRequire(import.meta.url),
+    resolveFromCwd: (cwd) => tryRequire(join(cwd, 'package.json')),
     resolveManaged: () => tryRequire(join(MANAGED_DEPS_DIR, 'package.json')),
     install: installIntoManagedDir,
     confirm: askYesNo,
@@ -90,10 +101,13 @@ export function defaultSharpLoaderDeps(): SharpLoaderDeps {
 }
 
 export async function loadSharp(
-  options: { assumeYes?: boolean },
+  options: { assumeYes?: boolean; cwd?: string },
   deps: SharpLoaderDeps = defaultSharpLoaderDeps(),
 ): Promise<SharpFactory> {
-  const existing = deps.resolveBundled() ?? deps.resolveManaged()
+  const existing =
+    deps.resolveBundled() ??
+    (options.cwd !== undefined ? deps.resolveFromCwd(options.cwd) : null) ??
+    deps.resolveManaged()
   if (existing) return existing
 
   const manualHint = `Install it yourself with: npm install ${SHARP_SPEC}`

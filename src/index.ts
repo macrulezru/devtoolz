@@ -235,6 +235,8 @@ export type {
   ImageHashRunOptions,
   ImageHashReport,
   ImageHashError,
+  ImageHashProgress,
+  OutdatedOutput,
 } from './commands/image-hash/run.js'
 export { renderImageHashReport } from './commands/image-hash/report.js'
-export type { HashEntry, HashType, OutputFormat } from './commands/image-hash/core.js'
+export type { Components, HashEntry, HashType, OutputFormat } from './commands/image-hash/core.js'
