@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { readFileSync } from 'node:fs'
+import { splitList } from './utils/split-list.js'
 import { resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { runStripComments } from './commands/strip-comments/run.js'
@@ -227,7 +228,7 @@ program
       const report = runStripComments({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
         keepJsdoc: options.keepJsdoc,
@@ -304,10 +305,10 @@ program
       const report = runConsoleStrip({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
-        methods: options.methods.split(',').map((m) => m.trim()),
+        methods: splitList(options.methods),
         debugger: options.debugger,
         dryRun: options.dryRun,
         yes: options.yes,
@@ -379,7 +380,7 @@ program
       const report = runDeadExports({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
         entry: options.entry,
@@ -442,7 +443,7 @@ program
       const report = runCircularImports({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
         includeTypes: options.includeTypes,
@@ -509,7 +510,7 @@ program
     ) => {
       const report = runUnusedDeps({
         dir: resolve(dir),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
         strict: options.strict,
@@ -585,7 +586,7 @@ program
       const report = runCaseCheck({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
         ...(options.tsconfig ? { tsconfig: options.tsconfig } : {}),
@@ -674,7 +675,7 @@ program
       const report = runReadmeCheck({
         dir: resolve(dir),
         files: options.file,
-        langs: options.lang.split(',').map((l) => l.trim().toLowerCase()),
+        langs: splitList(options.lang).map((l) => l.toLowerCase()),
         ...(options.tsconfig ? { tsconfig: options.tsconfig } : {}),
       })
 
@@ -733,7 +734,7 @@ program
       const report = runEmptyCatch({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
       })
@@ -801,10 +802,10 @@ program
       const report = runTodoReport({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
-        tags: options.tags.split(',').map((t) => t.trim()),
+        tags: splitList(options.tags),
         max: Number(options.max),
       })
 
@@ -919,11 +920,11 @@ program
       const report = runOrphanTests({
         paths,
         cwd: resolve(options.cwd),
-        extensions: options.ext.split(',').map((e) => e.trim()),
+        extensions: splitList(options.ext),
         ignoreGlobs: options.ignore,
         respectGitignore: options.respectGitignore,
-        testSuffixes: options.testSuffix.split(',').map((s) => s.trim()),
-        sourceExtensions: options.sourceExt.split(',').map((e) => e.trim()),
+        testSuffixes: splitList(options.testSuffix),
+        sourceExtensions: splitList(options.sourceExt),
         ...(options.sourceDir ? { sourceDir: options.sourceDir } : {}),
         ...(options.testDir ? { testDir: options.testDir } : {}),
       })

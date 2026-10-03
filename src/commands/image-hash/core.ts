@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
+import { splitList } from '../../utils/split-list.js'
 
 export type HashType = 'blurhash' | 'thumbhash' | 'color' | 'preview'
 
@@ -45,10 +46,7 @@ export interface OutputUnit {
 }
 
 export function parseTypes(value: string): HashType[] {
-  const names = value
-    .split(',')
-    .map((name) => name.trim().toLowerCase())
-    .filter(Boolean)
+  const names = splitList(value).map((name) => name.toLowerCase())
   const selected = new Set<HashType>()
   for (const name of names) {
     if (name === 'both') {
@@ -138,11 +136,7 @@ export function parseMaxPixels(value: string): number {
 }
 
 export function parseExtensions(value: string): string[] {
-  return value
-    .split(',')
-    .map((ext) => ext.trim())
-    .filter(Boolean)
-    .map((ext) => (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase())
+  return splitList(value).map((ext) => (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase())
 }
 
 export function withUpperCaseVariants(extensions: string[]): string[] {
@@ -166,14 +160,19 @@ export function splitPathArguments(
 ): string[] {
   const out: string[] = []
   for (const arg of args) {
-    if (isUrl(arg) || exists(arg) || !arg.includes(',')) {
+    if (isUrl(arg) || exists(arg)) {
       out.push(arg)
       continue
     }
-    for (const part of arg.split(',')) {
-      const trimmed = part.trim()
-      if (trimmed) out.push(trimmed)
+    if (arg.includes(',')) {
+      for (const part of arg.split(',')) {
+        const trimmed = part.trim()
+        if (trimmed) out.push(trimmed)
+      }
+      continue
     }
+    const words = arg.split(/\s+/).filter(Boolean)
+    out.push(...(words.length > 1 && words.every((word) => exists(word)) ? words : [arg]))
   }
   return out
 }
