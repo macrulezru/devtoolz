@@ -127,6 +127,17 @@ looking for is never touched.
   `.vue` files get an isolated per-file check (same technique as
   `readme-check`'s own virtual-file typechecking) — a plain
   `ts.Program` can't include `.vue` in a whole-project run at all.
+- **`image-hash`** — generates [blurhash](https://blurha.sh) and/or
+  [thumbhash](https://evanw.github.io/thumbhash/) placeholders for raster
+  images (jpg, png, webp, gif, avif, tiff). Takes files and/or
+  directories — several of each, comma-separated too — and `-r` walks
+  subdirectories. Prints to stdout by default; `-o <file>` collects
+  everything into one file, `--per-file` / `--out-dir <dir>` writes a
+  file per image (`photo.jpg` → `photo.jpg.blurhash.txt`, with
+  `--suffix` and `--out-ext` to rename). Formats: `json`, `plain` (just
+  the hash text, no newline), `csv`, and `ts`/`js` modules you can import
+  straight into the app. Uses the native `sharp` library, which devtoolz
+  offers to install on first use — see Requirements.
 - **`full-check`** — runs all twelve other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
   (`strip-comments`/`console-strip`/`case-check`) are always called as a
@@ -145,8 +156,10 @@ only previews, `-y`/`--yes` is required to actually write anything,
 `unused-deps`, `circular-imports`, `exports-doctor`, `readme-check`,
 `empty-catch`, `todo-report`, `scripts-check`, `orphan-tests`,
 `stale-ts-ignore`, and `full-check` are all read-only — none of them ever
-write anything, there's nothing to preview or apply. Every command
-supports `--json` for machine-readable output.
+write anything, there's nothing to preview or apply. `image-hash` writes
+files only when you name an output (`-o`, `--per-file`, `--out-dir`) and
+prints to stdout otherwise. Every command supports `--json` for
+machine-readable output.
 
 ## Tone
 
@@ -161,6 +174,13 @@ terminal — piped, `CI` set, `NO_COLOR` set — on top of the explicit
 ## Requirements
 
 - Node.js 20+
+- `image-hash` only: the [`sharp`](https://sharp.pixelplumbing.com)
+  image library. It ships prebuilt binaries for the common platforms and
+  is not installed with devtoolz — the first `image-hash` run offers to
+  install it into `~/.devtoolz/deps` (`-y` / `--yes` agrees up front, which
+  is also what you want in CI; without a terminal and without `--yes` the
+  command stops and says so). A `sharp` you already have installed
+  alongside devtoolz is used as-is.
 
 ## Installation
 
@@ -209,6 +229,11 @@ devtoolz scripts-check                         # package.json scripts vs README/
 devtoolz orphan-tests src                      # test files whose source disappeared
 
 devtoolz stale-ts-ignore                       # find @ts-ignore comments suppressing nothing
+
+devtoolz image-hash public/img                 # blurhash + thumbhash of every image, as JSON on stdout
+devtoolz image-hash a.jpg,b.png,photos -r -t blurhash -f csv -o hashes.csv
+devtoolz image-hash public/img -r -f plain --per-file   # photo.jpg.blurhash.txt + photo.jpg.thumbhash.txt
+devtoolz image-hash public/img -r -f ts -t thumbhash -o src/placeholders.ts --name placeholders
 
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
@@ -414,6 +439,34 @@ problems scattered across it:
 ✔ stale-ts-ignore   clean
 
 9 clean, 4 found something — see `devtoolz <command> --help` for full detail on any of them.
+```
+
+`devtoolz image-hash public/img -r -f plain --per-file` writing a text file
+per hash next to each image:
+
+```
+🧰 devtoolz
+
+Hashed 2 images.
+
+Wrote 4 files:
+  public/img/hero.jpg.blurhash.txt
+  public/img/hero.jpg.thumbhash.txt
+  public/img/logo.png.blurhash.txt
+  public/img/logo.png.thumbhash.txt
+```
+
+`devtoolz image-hash hero.jpg -t blurhash` printing JSON to stdout, ready to
+pipe or paste:
+
+```json
+{
+  "hero.jpg": {
+    "width": 1600,
+    "height": 900,
+    "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+  }
+}
 ```
 
 ## Development

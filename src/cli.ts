@@ -35,6 +35,18 @@ import {
   SLOW_FULL_CHECK_COMMAND,
 } from './commands/full-check/run.js'
 import { renderFullCheckReport } from './commands/full-check/report.js'
+import { runImageHash } from './commands/image-hash/run.js'
+import { renderImageHashReport } from './commands/image-hash/report.js'
+import {
+  DEFAULT_IMAGE_EXTENSIONS,
+  ImageHashUsageError,
+  OUTPUT_FORMATS,
+  parseComponents,
+  parseExtensions,
+  parseFormat,
+  parseSampleSize,
+  parseTypes,
+} from './commands/image-hash/core.js'
 
 interface HelpRow {
   indent: number
@@ -914,6 +926,122 @@ program
       }
 
       process.exitCode = report.exitCode
+    },
+  )
+
+program
+  .command('image-hash')
+  .description(
+    'Generate blurhash and/or thumbhash placeholders for raster images — to stdout, one file, or a file per image',
+  )
+  .argument(
+    '[paths...]',
+    'image files and/or directories (several allowed, comma-separated too)',
+    [],
+  )
+  .option('--cwd <path>', 'root paths are resolved against', process.cwd())
+  .option('-r, --recursive', 'also walk subdirectories of every given directory', false)
+  .option(
+    '--ext <list>',
+    'comma-separated image extensions to pick up from directories',
+    DEFAULT_IMAGE_EXTENSIONS.join(','),
+  )
+  .option(
+    '--ignore <glob>',
+    'extra ignore pattern (repeatable), on top of the built-in defaults',
+    (val, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
+  .option('-t, --type <type>', 'what to generate: blurhash, thumbhash or both', 'both')
+  .option('--components <XxY>', 'blurhash components, each side 1-9', '4x3')
+  .option('--size <px>', 'longest side the image is scaled down to before hashing (1-100)', '100')
+  .option(
+    '-f, --format <format>',
+    `output format: ${OUTPUT_FORMATS.join(', ')} (plain = just the hash text)`,
+    'json',
+  )
+  .option('--name <identifier>', 'exported constant name for --format ts/js', 'imageHashes')
+  .option('-o, --out <file>', 'write everything into one file instead of stdout')
+  .option('--per-file', 'write one file per image, next to the image', false)
+  .option('--out-dir <dir>', 'write the per-image files into this directory (implies --per-file)')
+  .option(
+    '--suffix <text>',
+    'per-image file name suffix after the image file name, {type} = blurhash/thumbhash/hash (default: .{type})',
+  )
+  .option('--out-ext <ext>', 'per-image file extension (default: by --format, plain = .txt)')
+  .option('--concurrency <n>', 'images processed in parallel', '4')
+  .option('-y, --yes', 'install the missing "sharp" image library without asking', false)
+  .option('--json', 'machine-readable output', false)
+  .option('--quiet', 'suppress output when there is nothing to report', false)
+  .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+  .action(
+    async (
+      paths: string[],
+      options: {
+        cwd: string
+        recursive: boolean
+        ext: string
+        ignore: string[]
+        respectGitignore: boolean
+        type: string
+        components: string
+        size: string
+        format: string
+        name: string
+        out?: string
+        perFile: boolean
+        outDir?: string
+        suffix?: string
+        outExt?: string
+        concurrency: string
+        yes: boolean
+        json: boolean
+        quiet: boolean
+        plain: boolean
+      },
+    ) => {
+      try {
+        const report = await runImageHash({
+          paths,
+          cwd: resolve(options.cwd),
+          types: parseTypes(options.type),
+          recursive: options.recursive,
+          extensions: parseExtensions(options.ext),
+          ignoreGlobs: options.ignore,
+          respectGitignore: options.respectGitignore,
+          components: parseComponents(options.components),
+          size: parseSampleSize(options.size),
+          format: parseFormat(options.format),
+          exportName: options.name,
+          ...(options.out !== undefined ? { out: options.out } : {}),
+          perFile: options.perFile,
+          ...(options.outDir !== undefined ? { outDir: options.outDir } : {}),
+          ...(options.suffix !== undefined ? { suffix: options.suffix } : {}),
+          ...(options.outExt !== undefined ? { outExtension: options.outExt } : {}),
+          concurrency: Math.max(1, Number.parseInt(options.concurrency, 10) || 4),
+          assumeYes: options.yes,
+        })
+
+        if (options.json) {
+          console.log(JSON.stringify(report, null, 2))
+        } else if (report.stdout !== null) {
+          process.stdout.write(report.stdout)
+          for (const error of report.errors) console.error(`${error.file} — ${error.message}`)
+        } else {
+          const text = renderImageHashReport(report, { quiet: options.quiet, plain: options.plain })
+          if (text) console.log(text)
+        }
+
+        process.exitCode = report.exitCode
+      } catch (error) {
+        if (error instanceof ImageHashUsageError) {
+          console.error(`error: ${error.message}`)
+          process.exitCode = 2
+          return
+        }
+        throw error
+      }
     },
   )
 

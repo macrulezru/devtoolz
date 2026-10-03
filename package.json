@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/devtoolz",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A small toolbox of CLI commands that automate routine dev chores — strip comments/console.log, find dead exports, catch case-sensitivity import bugs before Linux CI does",
   "type": "module",
   "license": "MIT",
@@ -39,9 +39,11 @@
     "format:fix": "prettier --write ."
   },
   "dependencies": {
+    "blurhash": "^2.0.5",
     "commander": "^13.1.0",
     "diff": "^7.0.0",
     "ignore": "^6.0.2",
+    "thumbhash": "^0.1.1",
     "typescript": "^5.7.3"
   },
   "devDependencies": {
@@ -50,6 +52,7 @@
     "@types/node": "^20.14.0",
     "eslint": "^9.20.0",
     "prettier": "^3.9.8",
+    "sharp": "^0.35.5",
     "tsx": "^4.19.2",
     "typescript-eslint": "^8.23.0",
     "vitest": "^3.0.5"

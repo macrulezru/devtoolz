@@ -47,6 +47,8 @@ export interface WalkOptions {
   ignoreGlobs?: string[]
   /** default true — also honor <cwd>/.gitignore, root-level only (see features.md case-check/walk caveats) */
   respectGitignore?: boolean
+  /** default true — descend into subdirectories; false only lists files directly inside each given directory */
+  recursive?: boolean
 }
 
 function buildMatcher(options: WalkOptions): Ignore {
@@ -84,13 +86,14 @@ function walkDir(
   matcher: Ignore,
   extensions: Set<string>,
   out: string[],
+  recursive: boolean,
 ): void {
   for (const entry of readdirSync(absDir, { withFileTypes: true })) {
     const absPath = join(absDir, entry.name)
     if (isIgnored(absPath, cwd, matcher)) continue
 
     if (entry.isDirectory()) {
-      walkDir(absPath, cwd, matcher, extensions, out)
+      if (recursive) walkDir(absPath, cwd, matcher, extensions, out, recursive)
     } else if (entry.isFile()) {
       const dot = entry.name.lastIndexOf('.')
       const ext = dot === -1 ? '' : entry.name.slice(dot)
@@ -122,7 +125,7 @@ export function walk(inputPaths: string[], options: WalkOptions): string[] {
     if (!stat) continue
 
     if (stat.isDirectory()) {
-      walkDir(absPath, options.cwd, matcher, extensions, out)
+      walkDir(absPath, options.cwd, matcher, extensions, out, options.recursive !== false)
     } else if (stat.isFile()) {
       out.push(absPath)
     }
