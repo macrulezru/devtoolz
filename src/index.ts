@@ -229,3 +229,14 @@ export { renderFullCheckReport } from './commands/full-check/report.js'
 
 export { walk } from './utils/walk.js'
 export type { WalkOptions } from './utils/walk.js'
+
+export { runImageHash } from './commands/image-hash/run.js'
+export type {
+  ImageHashRunOptions,
+  ImageHashReport,
+  ImageHashError,
+  ImageHashProgress,
+  OutdatedOutput,
+} from './commands/image-hash/run.js'
+export { renderImageHashReport } from './commands/image-hash/report.js'
+export type { Components, HashEntry, HashType, OutputFormat } from './commands/image-hash/core.js'

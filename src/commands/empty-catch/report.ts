@@ -1,5 +1,6 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { EmptyCatchReport } from './run.js'
 
 const KIND_LABEL: Record<string, string> = {
@@ -11,20 +12,26 @@ export function renderEmptyCatchReport(
   report: EmptyCatchReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   const isClean = report.findings.length === 0
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
-  lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`, '')
+  lines.push(
+    s.info(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`),
+    '',
+  )
 
   if (isClean) {
     lines.push(cleanCelebration(options))
     return lines.join('\n')
   }
 
-  lines.push(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`)
+  lines.push(
+    s.problem(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`),
+  )
   lines.push(
     ...formatFindingsRows(
       report.findings.map((f) => ({

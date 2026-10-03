@@ -1,24 +1,31 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { DeadExportsReport } from './run.js'
 
 export function renderDeadExportsReport(
   report: DeadExportsReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   const isClean = report.findings.length === 0
   if (options.quiet && isClean && !report.hasUnresolvableDynamicImports) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
-  lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`, '')
+  lines.push(
+    s.info(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`),
+    '',
+  )
 
   if (isClean) {
     lines.push(cleanCelebration(options))
   } else {
     lines.push(
-      `${report.findings.length} dead export${report.findings.length === 1 ? '' : 's'} found:`,
+      s.problem(
+        `${report.findings.length} dead export${report.findings.length === 1 ? '' : 's'} found:`,
+      ),
     )
     lines.push(
       ...formatFindingsRows(
@@ -35,7 +42,9 @@ export function renderDeadExportsReport(
   if (report.hasUnresolvableDynamicImports) {
     lines.push(
       '',
-      "Note: found a dynamic import() whose path isn't a plain string literal — it could not be resolved, so results here may include false positives.",
+      s.warn(
+        "Note: found a dynamic import() whose path isn't a plain string literal — it could not be resolved, so results here may include false positives.",
+      ),
     )
   }
 

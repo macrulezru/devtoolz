@@ -1,5 +1,6 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { ScriptsCheckReport } from './run.js'
 
 const KIND_TAG: Record<string, string> = {
@@ -11,10 +12,11 @@ export function renderScriptsCheckReport(
   report: ScriptsCheckReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   if (report.error) {
     const lines: string[] = []
-    if (!options.quiet && !options.plain) lines.push(banner(), '')
-    lines.push(`Could not run scripts-check: ${report.error}`)
+    if (!options.quiet && !options.plain) lines.push(banner(options), '')
+    lines.push(s.error(`Could not run scripts-check: ${report.error}`))
     return lines.join('\n')
   }
 
@@ -22,10 +24,12 @@ export function renderScriptsCheckReport(
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
   lines.push(
-    `Checked ${report.sourcesScanned.length} source${report.sourcesScanned.length === 1 ? '' : 's'} against package.json's scripts.`,
+    s.info(
+      `Checked ${report.sourcesScanned.length} source${report.sourcesScanned.length === 1 ? '' : 's'} against package.json's scripts.`,
+    ),
     '',
   )
 
@@ -34,7 +38,9 @@ export function renderScriptsCheckReport(
     return lines.join('\n')
   }
 
-  lines.push(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`)
+  lines.push(
+    s.problem(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`),
+  )
   lines.push(
     ...formatFindingsRows(
       report.findings.map((f) => ({

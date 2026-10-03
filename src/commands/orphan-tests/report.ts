@@ -1,15 +1,17 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { OrphanTestsReport } from './run.js'
 
 export function renderOrphanTestsReport(
   report: OrphanTestsReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   if (report.error) {
     const lines: string[] = []
-    if (!options.quiet && !options.plain) lines.push(banner(), '')
-    lines.push(`Could not run orphan-tests: ${report.error}`)
+    if (!options.quiet && !options.plain) lines.push(banner(options), '')
+    lines.push(s.error(`Could not run orphan-tests: ${report.error}`))
     return lines.join('\n')
   }
 
@@ -17,9 +19,12 @@ export function renderOrphanTestsReport(
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
-  lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`, '')
+  lines.push(
+    s.info(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`),
+    '',
+  )
 
   if (isClean) {
     lines.push(cleanCelebration(options))
@@ -27,7 +32,9 @@ export function renderOrphanTestsReport(
   }
 
   lines.push(
-    `${report.findings.length} orphan test${report.findings.length === 1 ? '' : 's'} found:`,
+    s.problem(
+      `${report.findings.length} orphan test${report.findings.length === 1 ? '' : 's'} found:`,
+    ),
   )
   lines.push(
     ...formatFindingsRows(

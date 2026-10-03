@@ -1,15 +1,17 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { ReadmeCheckReport } from './run.js'
 
 export function renderReadmeCheckReport(
   report: ReadmeCheckReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   if (report.error) {
     const lines: string[] = []
-    if (!options.quiet && !options.plain) lines.push(banner(), '')
-    lines.push(`Could not run readme-check: ${report.error}`)
+    if (!options.quiet && !options.plain) lines.push(banner(options), '')
+    lines.push(s.error(`Could not run readme-check: ${report.error}`))
     return lines.join('\n')
   }
 
@@ -18,10 +20,12 @@ export function renderReadmeCheckReport(
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
   lines.push(
-    `Typechecked ${blocksChecked} code block${blocksChecked === 1 ? '' : 's'} across ${report.fileResults.length} file${report.fileResults.length === 1 ? '' : 's'}.`,
+    s.info(
+      `Typechecked ${blocksChecked} code block${blocksChecked === 1 ? '' : 's'} across ${report.fileResults.length} file${report.fileResults.length === 1 ? '' : 's'}.`,
+    ),
     '',
   )
 
@@ -30,7 +34,9 @@ export function renderReadmeCheckReport(
     return lines.join('\n')
   }
 
-  lines.push(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`)
+  lines.push(
+    s.problem(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`),
+  )
   lines.push(
     ...formatFindingsRows(
       report.findings.map((f) => ({

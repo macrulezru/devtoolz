@@ -127,7 +127,24 @@ looking for is never touched.
   `.vue` files get an isolated per-file check (same technique as
   `readme-check`'s own virtual-file typechecking) — a plain
   `ts.Program` can't include `.vue` in a whole-project run at all.
-- **`full-check`** — runs all twelve other commands in one sweep, each in
+- **`image-hash`** — generates [blurhash](https://blurha.sh) and/or
+  [thumbhash](https://evanw.github.io/thumbhash/) placeholders for raster
+  images (jpg, png, webp, gif, avif, tiff). Takes files and/or
+  directories — several of each, comma-separated too — and `-r` walks
+  subdirectories. Prints to stdout by default; `-o <file>` collects
+  everything into one file, `--per-file` / `--out-dir <dir>` writes a
+  file per image (`photo.jpg` → `photo.jpg.blurhash.txt`, with
+  `--suffix` and `--out-ext` to rename). Formats: `json`, `plain` (just
+  the hash text, no newline), `csv`, and `ts`/`js` modules you can import
+  straight into the app. Besides the two hashes it can produce the
+  dominant color and a tiny PNG preview (`-t all`), accepts `http(s)`
+  URLs and path lists from a file or stdin, and can keep an output file in
+  sync: `--cache` skips unchanged images, `--update --prune` merges into
+  the existing file, `--check` fails with exit code 1 when it is stale
+  (made for CI). `--dry-run` writes nothing and shows the result as a
+  table instead. Uses the native `sharp` library, which devtoolz
+  offers to install on first use — see Requirements.
+- **`full-check`** — runs all thirteen other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
   (`strip-comments`/`console-strip`/`case-check`) are always called as a
   preview, `-y`/`--fix` are never passed. One summary table: which
@@ -145,22 +162,42 @@ only previews, `-y`/`--yes` is required to actually write anything,
 `unused-deps`, `circular-imports`, `exports-doctor`, `readme-check`,
 `empty-catch`, `todo-report`, `scripts-check`, `orphan-tests`,
 `stale-ts-ignore`, and `full-check` are all read-only — none of them ever
-write anything, there's nothing to preview or apply. Every command
-supports `--json` for machine-readable output.
+write anything, there's nothing to preview or apply. `image-hash` writes
+files only when you name an output (`-o`, `--per-file`, `--out-dir`) and
+prints to stdout otherwise. Every command supports `--json` for
+machine-readable output.
 
 ## Tone
 
 Not dead silent, not relentlessly jokey either — a small banner and some
 personality when everything comes back clean, nothing cute mixed into the
-actual findings list, which stays in aligned, colored columns (file in
-white, count/tag in dim grey) for quick scanning. Auto-disables (banner,
-color, celebration copy) the moment output isn't a real interactive
-terminal — piped, `CI` set, `NO_COLOR` set — on top of the explicit
-`--quiet`/`--plain` flags.
+actual findings list, which stays in aligned columns for quick scanning.
+
+Output is colored with one palette across every command: file paths in
+cyan with their `:line:column` dimmed, names and kinds in yellow, the
+"N problems found" heading in bold red, what a command would do in bold
+yellow and what it did in bold green, hints dimmed with the flags they
+mention (`-y`, `--dry-run`) picked out in cyan, `✔`/`✖` in the
+`full-check` table in green/red, and the diffs red/green as before.
+
+Color turns itself off the moment output isn't a real interactive
+terminal — piped, `CI` set, `NO_COLOR` set, `TERM=dumb`. `--color` (or
+`FORCE_COLOR=1`) turns it back on anyway, which is what you want for
+`devtoolz … --color | less -R` or a CI log that renders ANSI; `--plain`
+turns color, the banner and the celebration copy all off, and `--quiet`
+only drops the banner and clean-run output. The text is identical with
+and without color — only escape codes are added.
 
 ## Requirements
 
 - Node.js 20+
+- `image-hash` only: the [`sharp`](https://sharp.pixelplumbing.com)
+  image library. It ships prebuilt binaries for the common platforms and
+  is not installed with devtoolz — the first `image-hash` run offers to
+  install it into `~/.devtoolz/deps` (`-y` / `--yes` agrees up front, which
+  is also what you want in CI; without a terminal and without `--yes` the
+  command stops and says so). A `sharp` you already have installed
+  alongside devtoolz is used as-is.
 
 ## Installation
 
@@ -209,6 +246,14 @@ devtoolz scripts-check                         # package.json scripts vs README/
 devtoolz orphan-tests src                      # test files whose source disappeared
 
 devtoolz stale-ts-ignore                       # find @ts-ignore comments suppressing nothing
+
+devtoolz image-hash public/img                 # blurhash + thumbhash of every image, as JSON on stdout
+devtoolz image-hash a.jpg,b.png,photos -r -t blurhash -f csv -o hashes.csv
+devtoolz image-hash public/img -r -f plain --per-file   # photo.jpg.blurhash.txt + photo.jpg.thumbhash.txt
+devtoolz image-hash public/img -r -f ts -t thumbhash -o src/placeholders.ts --name placeholders
+devtoolz image-hash public/img -r --dry-run        # write nothing, show a table of the hashes
+devtoolz image-hash public/img -r -t all --components auto -o hashes.json --cache --update --prune
+devtoolz image-hash public/img -r -o hashes.json --check   # CI: exit 1 if hashes.json is stale
 
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
@@ -414,6 +459,50 @@ problems scattered across it:
 ✔ stale-ts-ignore   clean
 
 9 clean, 4 found something — see `devtoolz <command> --help` for full detail on any of them.
+```
+
+`devtoolz image-hash public/img -r -f plain --per-file` writing a text file
+per hash next to each image:
+
+```
+🧰 devtoolz
+
+Hashed 2 images.
+
+Wrote 4 files:
+  public/img/hero.jpg.blurhash.txt
+  public/img/hero.jpg.thumbhash.txt
+  public/img/logo.png.blurhash.txt
+  public/img/logo.png.thumbhash.txt
+```
+
+`devtoolz image-hash hero.jpg -t blurhash` printing JSON to stdout, ready to
+pipe or paste:
+
+```json
+{
+  "hero.jpg": {
+    "width": 1600,
+    "height": 900,
+    "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+  }
+}
+```
+
+`devtoolz image-hash public/img -r -t blurhash --dry-run` shows what would be
+generated as a table and writes nothing:
+
+```
+┌─────────────────────┬─────────┬──────────────────────────────┐
+│ File                │    Size │ BlurHash                     │
+├─────────────────────┼─────────┼──────────────────────────────┤
+│ public/img/blue.png │ 120×300 │ L704c9gSfQgSf:fRfQfRfQfQfQfQ │
+│ public/img/red.jpg  │ 200×100 │ L6T9R{,YfQ,Y|cjtfQjtfQfQfQfQ │
+└─────────────────────┴─────────┴──────────────────────────────┘
+
+Hashed 2 images.
+
+(dry run — nothing written)
 ```
 
 ## Development

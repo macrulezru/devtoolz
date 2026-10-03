@@ -1,4 +1,4 @@
-import { isFancyOutputEnabled, type VibesOptions } from './vibes.js'
+import { isColorEnabled, type VibesOptions } from './vibes.js'
 import { BOLD, CYAN, colorize, GREEN, RED } from './colors.js'
 
 const RULE_CHAR = '─'
@@ -20,7 +20,7 @@ export function renderDiffForHumans(
   patch: string,
   options: VibesOptions = {},
 ): string {
-  const fancy = isFancyOutputEnabled(options)
+  const fancy = isColorEnabled(options)
 
   const lines = patch.split('\n')
   const firstHunkIndex = lines.findIndex((l) => l.startsWith('@@'))

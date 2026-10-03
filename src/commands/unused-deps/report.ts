@@ -1,15 +1,17 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { UnusedDepsReport } from './run.js'
 
 export function renderUnusedDepsReport(
   report: UnusedDepsReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   if (report.error) {
     const lines: string[] = []
-    if (!options.quiet && !options.plain) lines.push(banner(), '')
-    lines.push(`Could not run unused-deps: ${report.error}`)
+    if (!options.quiet && !options.plain) lines.push(banner(options), '')
+    lines.push(s.error(`Could not run unused-deps: ${report.error}`))
     return lines.join('\n')
   }
 
@@ -17,16 +19,21 @@ export function renderUnusedDepsReport(
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
-  lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`, '')
+  lines.push(
+    s.info(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`),
+    '',
+  )
 
   if (isClean) {
     lines.push(cleanCelebration(options))
     return lines.join('\n')
   }
 
-  lines.push(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`)
+  lines.push(
+    s.problem(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`),
+  )
   lines.push(
     ...formatFindingsRows(
       report.findings.map((f) => ({

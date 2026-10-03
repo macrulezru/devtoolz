@@ -1,3 +1,5 @@
+import { BOLD, CYAN, GREEN, colorize } from './colors.js'
+
 // Centralized pool of the CLI's "personality" moments — see features.md
 // "Тон вывода" for the ground rules this exists to enforce: humor only at
 // bookending moments (banner, all-clean celebration), never inside the
@@ -10,6 +12,19 @@ export interface VibesOptions {
   quiet?: boolean
   /** --plain: force plain output even in a real TTY (explicit opt-out) */
   plain?: boolean
+  /** --color: force colored output even when piped or in CI */
+  color?: boolean
+}
+
+export function isColorEnabled(options: VibesOptions = {}): boolean {
+  if (options.plain) return false
+  if (options.color) return true
+  if (process.env.NO_COLOR) return false
+  const force = process.env.FORCE_COLOR
+  if (force !== undefined && force !== '') return force !== '0' && force !== 'false'
+  if (process.env.CI) return false
+  if (process.env.TERM === 'dumb') return false
+  return Boolean(process.stdout.isTTY)
 }
 
 // Fancy output (color, banner, celebration copy) only makes sense for a
@@ -40,8 +55,9 @@ const BANNERS = [
 // One compact line, shown once per invocation — never a multi-line ASCII
 // block. That's reserved for the all-clean celebration below, where it's
 // actually earned.
-export function banner(): string {
-  return pick(BANNERS)
+export function banner(options: VibesOptions = {}): string {
+  const text = pick(BANNERS)
+  return isColorEnabled(options) ? colorize(BOLD + CYAN, text) : text
 }
 
 const CLEAN_LINES = [
@@ -64,8 +80,11 @@ const CLEAN_ART = [
 // something (see features.md: don't joke over a real problem report).
 export function cleanCelebration(options: VibesOptions = {}): string {
   const line = pick(CLEAN_LINES)
-  if (!isFancyOutputEnabled(options)) return line
-  return `${line}\n${pick(CLEAN_ART)}`
+  const color = isColorEnabled(options)
+  const styledLine = color ? colorize(BOLD + GREEN, line) : line
+  if (!isFancyOutputEnabled(options)) return styledLine
+  const art = pick(CLEAN_ART)
+  return `${styledLine}\n${color ? colorize(GREEN, art) : art}`
 }
 
 const FIRST_RUN_LINES = ["First time here? Let's see what we've got.", 'Taking a look...']
