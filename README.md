@@ -144,7 +144,7 @@ looking for is never touched.
   (made for CI). `--dry-run` writes nothing and shows the result as a
   table instead. Uses the native `sharp` library, which devtoolz
   offers to install on first use — see Requirements.
-- **`full-check`** — runs all twelve other commands in one sweep, each in
+- **`full-check`** — runs all thirteen other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
   (`strip-comments`/`console-strip`/`case-check`) are always called as a
   preview, `-y`/`--fix` are never passed. One summary table: which
