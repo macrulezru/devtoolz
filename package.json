@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/devtoolz",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A small toolbox of CLI commands that automate routine dev chores — strip comments/console.log, find dead exports, catch case-sensitivity import bugs before Linux CI does",
   "type": "module",
   "license": "MIT",
@@ -30,6 +30,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
