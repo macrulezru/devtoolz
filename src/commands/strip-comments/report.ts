@@ -1,6 +1,7 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFileCountRows } from '../../format/file-list.js'
 import { renderDiffForHumans } from '../../format/diff-render.js'
+import { createStyle } from '../../format/style.js'
 import type { StripCommentsReport } from './run.js'
 
 export interface RenderOptions extends VibesOptions {
@@ -11,12 +12,16 @@ export function renderStripCommentsReport(
   report: StripCommentsReport,
   options: RenderOptions = {},
 ): string {
+  const s = createStyle(options)
   if (options.quiet && report.changes.length === 0) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
-  lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`, '')
+  lines.push(
+    s.info(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? '' : 's'}.`),
+    '',
+  )
 
   if (report.changes.length === 0) {
     lines.push(cleanCelebration(options))
@@ -24,14 +29,14 @@ export function renderStripCommentsReport(
   }
 
   const verb = report.applied ? 'Stripped comments in' : 'Would strip comments in'
-  lines.push(`${verb} ${report.changes.length} file(s):`)
+  lines.push(s.heading(`${verb} ${report.changes.length} file(s):`))
   lines.push(...formatFileCountRows(report.changes, (n) => `comment${n === 1 ? '' : 's'}`, options))
 
   if (!report.applied) {
     const diffHint = report.changes.some((c) => c.diff) ? '' : ', or --diff to see exactly what'
     lines.push(
       '',
-      `(nothing written — pass -y to apply${diffHint}, or --dry-run to keep previewing)`,
+      s.hint(`(nothing written — pass -y to apply${diffHint}, or --dry-run to keep previewing)`),
     )
   }
 

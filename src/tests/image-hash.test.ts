@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { decode } from 'blurhash'
 import { thumbHashToRGBA } from 'thumbhash'
 import { runImageHash } from '../commands/image-hash/run.js'
+import { renderImageHashReport } from '../commands/image-hash/report.js'
 import {
   ImageHashUsageError,
   formatAggregate,
@@ -245,6 +246,53 @@ describe('runImageHash', () => {
     expect(report.entries).toEqual([])
     expect(report.errors.map((e) => e.file).sort()).toEqual(['img/broken.jpg', 'nope'])
     expect(report.exitCode).toBe(1)
+  })
+
+  it('writes nothing with --dry-run, lists what would be written and shows a table', async () => {
+    const report = await runImageHash({
+      paths: ['img'],
+      cwd: root,
+      types: ['blurhash', 'thumbhash'],
+      format: 'plain',
+      perFile: true,
+      dryRun: true,
+    })
+    expect(report.dryRun).toBe(true)
+    expect(report.written).toContain('img/red.jpg.blurhash.txt')
+    expect(existsSync(join(root, 'img', 'red.jpg.blurhash.txt'))).toBe(false)
+
+    const text = renderImageHashReport(report, { plain: true })
+    expect(text).toContain('│ File')
+    expect(text).toContain('BlurHash')
+    expect(text).toContain('ThumbHash')
+    expect(text).toContain('200×100')
+    expect(text).toContain('Would write')
+    expect(text).toContain('dry run — nothing written')
+  })
+
+  it('does not write the --out file and does not print data on --dry-run', async () => {
+    const report = await runImageHash({
+      paths: ['img'],
+      cwd: root,
+      types: ['blurhash'],
+      out: 'hashes.json',
+      dryRun: true,
+    })
+    expect(existsSync(join(root, 'hashes.json'))).toBe(false)
+    expect(report.written).toEqual(['hashes.json'])
+    expect(report.stdout).toBeNull()
+  })
+
+  it('shows only the requested hash columns in the table', async () => {
+    const report = await runImageHash({
+      paths: ['img/red.jpg'],
+      cwd: root,
+      types: ['thumbhash'],
+      dryRun: true,
+    })
+    const text = renderImageHashReport(report, { plain: true })
+    expect(text).toContain('ThumbHash')
+    expect(text).not.toContain('BlurHash')
   })
 
   it('refuses --out together with --per-file', async () => {

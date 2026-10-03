@@ -42,6 +42,7 @@ export interface ImageHashRunOptions {
   outExtension?: string
   concurrency?: number
   assumeYes?: boolean
+  dryRun?: boolean
   sharp?: SharpFactory
   onProgress?: (message: string) => void
 }
@@ -57,6 +58,7 @@ export interface ImageHashReport {
   written: string[]
   errors: ImageHashError[]
   stdout: string | null
+  dryRun: boolean
   exitCode: number
 }
 
@@ -158,7 +160,8 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-function writeText(path: string, content: string): void {
+function writeText(path: string, content: string, dryRun: boolean): void {
+  if (dryRun) return
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
 }
@@ -167,6 +170,7 @@ export async function runImageHash(options: ImageHashRunOptions): Promise<ImageH
   const format = options.format ?? 'json'
   const exportName = validateExportName(options.exportName ?? DEFAULT_EXPORT_NAME)
   const perFile = Boolean(options.perFile) || options.outDir !== undefined
+  const dryRun = Boolean(options.dryRun)
 
   if (options.out !== undefined && perFile) {
     throw new ImageHashUsageError('--out cannot be combined with --per-file or --out-dir')
@@ -223,7 +227,7 @@ export async function runImageHash(options: ImageHashRunOptions): Promise<ImageH
           continue
         }
         claimed.add(target)
-        writeText(target, unit.content)
+        writeText(target, unit.content, dryRun)
         written.push(toPosix(relative(options.cwd, target)))
       }
     }
@@ -231,9 +235,9 @@ export async function runImageHash(options: ImageHashRunOptions): Promise<ImageH
     const content = formatAggregate(entries, options.types, format, exportName)
     if (options.out !== undefined) {
       const target = resolve(options.cwd, options.out)
-      writeText(target, content)
+      writeText(target, content, dryRun)
       written.push(toPosix(relative(options.cwd, target)))
-    } else {
+    } else if (!dryRun) {
       stdout = content
     }
   }
@@ -244,6 +248,7 @@ export async function runImageHash(options: ImageHashRunOptions): Promise<ImageH
     written,
     errors,
     stdout,
+    dryRun,
     exitCode: errors.length > 0 ? 1 : 0,
   }
 }

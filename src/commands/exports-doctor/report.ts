@@ -1,5 +1,6 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { ExportsDoctorReport } from './run.js'
 
 const KIND_LABEL: Record<string, (path: string, realPath?: string) => string> = {
@@ -13,10 +14,11 @@ export function renderExportsDoctorReport(
   report: ExportsDoctorReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   if (report.error) {
     const lines: string[] = []
-    if (!options.quiet && !options.plain) lines.push(banner(), '')
-    lines.push(`Could not read package.json: ${report.error}`)
+    if (!options.quiet && !options.plain) lines.push(banner(options), '')
+    lines.push(s.error(`Could not read package.json: ${report.error}`))
     return lines.join('\n')
   }
 
@@ -24,16 +26,18 @@ export function renderExportsDoctorReport(
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
-  lines.push(`Checked ${report.packageName ?? 'this package'}'s declared exports.`, '')
+  lines.push(s.info(`Checked ${report.packageName ?? 'this package'}'s declared exports.`), '')
 
   if (isClean) {
     lines.push(cleanCelebration(options))
     return lines.join('\n')
   }
 
-  lines.push(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`)
+  lines.push(
+    s.problem(`${report.findings.length} problem${report.findings.length === 1 ? '' : 's'} found:`),
+  )
   lines.push(
     ...formatFindingsRows(
       report.findings.map((f) => ({

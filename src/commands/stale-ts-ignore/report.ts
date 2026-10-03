@@ -1,15 +1,17 @@
 import { banner, cleanCelebration, type VibesOptions } from '../../format/vibes.js'
 import { formatFindingsRows } from '../../format/findings-list.js'
+import { createStyle } from '../../format/style.js'
 import type { StaleTsIgnoreReport } from './run.js'
 
 export function renderStaleTsIgnoreReport(
   report: StaleTsIgnoreReport,
   options: VibesOptions = {},
 ): string {
+  const s = createStyle(options)
   if (report.error) {
     const lines: string[] = []
-    if (!options.quiet && !options.plain) lines.push(banner(), '')
-    lines.push(`Could not run stale-ts-ignore: ${report.error}`)
+    if (!options.quiet && !options.plain) lines.push(banner(options), '')
+    lines.push(s.error(`Could not run stale-ts-ignore: ${report.error}`))
     return lines.join('\n')
   }
 
@@ -17,10 +19,12 @@ export function renderStaleTsIgnoreReport(
   if (options.quiet && isClean) return ''
 
   const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(), '')
+  if (!options.quiet && !options.plain) lines.push(banner(options), '')
 
   lines.push(
-    `Checked ${report.directivesChecked} @ts-ignore directive${report.directivesChecked === 1 ? '' : 's'}.`,
+    s.info(
+      `Checked ${report.directivesChecked} @ts-ignore directive${report.directivesChecked === 1 ? '' : 's'}.`,
+    ),
     '',
   )
 
@@ -30,7 +34,9 @@ export function renderStaleTsIgnoreReport(
   }
 
   lines.push(
-    `${report.findings.length} stale @ts-ignore${report.findings.length === 1 ? '' : 's'} found:`,
+    s.problem(
+      `${report.findings.length} stale @ts-ignore${report.findings.length === 1 ? '' : 's'} found:`,
+    ),
   )
   lines.push(
     ...formatFindingsRows(

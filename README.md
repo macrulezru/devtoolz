@@ -136,7 +136,8 @@ looking for is never touched.
   file per image (`photo.jpg` → `photo.jpg.blurhash.txt`, with
   `--suffix` and `--out-ext` to rename). Formats: `json`, `plain` (just
   the hash text, no newline), `csv`, and `ts`/`js` modules you can import
-  straight into the app. Uses the native `sharp` library, which devtoolz
+  straight into the app. `--dry-run` writes nothing and shows the result
+  as a table instead. Uses the native `sharp` library, which devtoolz
   offers to install on first use — see Requirements.
 - **`full-check`** — runs all twelve other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
@@ -165,11 +166,22 @@ machine-readable output.
 
 Not dead silent, not relentlessly jokey either — a small banner and some
 personality when everything comes back clean, nothing cute mixed into the
-actual findings list, which stays in aligned, colored columns (file in
-white, count/tag in dim grey) for quick scanning. Auto-disables (banner,
-color, celebration copy) the moment output isn't a real interactive
-terminal — piped, `CI` set, `NO_COLOR` set — on top of the explicit
-`--quiet`/`--plain` flags.
+actual findings list, which stays in aligned columns for quick scanning.
+
+Output is colored with one palette across every command: file paths in
+cyan with their `:line:column` dimmed, names and kinds in yellow, the
+"N problems found" heading in bold red, what a command would do in bold
+yellow and what it did in bold green, hints dimmed with the flags they
+mention (`-y`, `--dry-run`) picked out in cyan, `✔`/`✖` in the
+`full-check` table in green/red, and the diffs red/green as before.
+
+Color turns itself off the moment output isn't a real interactive
+terminal — piped, `CI` set, `NO_COLOR` set, `TERM=dumb`. `--color` (or
+`FORCE_COLOR=1`) turns it back on anyway, which is what you want for
+`devtoolz … --color | less -R` or a CI log that renders ANSI; `--plain`
+turns color, the banner and the celebration copy all off, and `--quiet`
+only drops the banner and clean-run output. The text is identical with
+and without color — only escape codes are added.
 
 ## Requirements
 
@@ -234,6 +246,7 @@ devtoolz image-hash public/img                 # blurhash + thumbhash of every i
 devtoolz image-hash a.jpg,b.png,photos -r -t blurhash -f csv -o hashes.csv
 devtoolz image-hash public/img -r -f plain --per-file   # photo.jpg.blurhash.txt + photo.jpg.thumbhash.txt
 devtoolz image-hash public/img -r -f ts -t thumbhash -o src/placeholders.ts --name placeholders
+devtoolz image-hash public/img -r --dry-run        # write nothing, show a table of the hashes
 
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
@@ -467,6 +480,22 @@ pipe or paste:
     "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
   }
 }
+```
+
+`devtoolz image-hash public/img -r -t blurhash --dry-run` shows what would be
+generated as a table and writes nothing:
+
+```
+┌─────────────────────┬─────────┬──────────────────────────────┐
+│ File                │    Size │ BlurHash                     │
+├─────────────────────┼─────────┼──────────────────────────────┤
+│ public/img/blue.png │ 120×300 │ L704c9gSfQgSf:fRfQfRfQfQfQfQ │
+│ public/img/red.jpg  │ 200×100 │ L6T9R{,YfQ,Y|cjtfQjtfQfQfQfQ │
+└─────────────────────┴─────────┴──────────────────────────────┘
+
+Hashed 2 images.
+
+(dry run — nothing written)
 ```
 
 ## Development
