@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { splitList } from '../../utils/split-list.js'
 
-export type HashType = 'blurhash' | 'thumbhash' | 'color' | 'preview'
+export type HashType = 'hazehash' | 'blurhash' | 'thumbhash' | 'color' | 'preview'
 
-export const ALL_TYPES: HashType[] = ['blurhash', 'thumbhash', 'color', 'preview']
+export const ALL_TYPES: HashType[] = ['hazehash', 'blurhash', 'thumbhash', 'color', 'preview']
 
 export const OUTPUT_FORMATS = ['json', 'plain', 'csv', 'ts', 'js'] as const
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number]
@@ -22,6 +22,9 @@ export const DEFAULT_IMAGE_EXTENSIONS = [
 
 export const DEFAULT_EXPORT_NAME = 'imageHashes'
 export const DEFAULT_BLURHASH_COMPONENTS = { x: 4, y: 3 }
+export const DEFAULT_HAZEHASH_BUDGET = 28
+export const MIN_HAZEHASH_BUDGET = 7
+export const MAX_HAZEHASH_BUDGET = 48
 export const DEFAULT_SAMPLE_SIZE = 100
 export const MAX_SAMPLE_SIZE = 100
 export const DEFAULT_CACHE_FILE = '.devtoolz-image-hash-cache.json'
@@ -34,6 +37,7 @@ export interface HashEntry {
   file: string
   width: number
   height: number
+  hazehash?: string
   blurhash?: string
   thumbhash?: string
   color?: string
@@ -64,7 +68,7 @@ export function parseTypes(value: string): HashType[] {
   }
   if (selected.size === 0) {
     throw new ImageHashUsageError(
-      '--type needs at least one of blurhash, thumbhash, color, preview',
+      '--type needs at least one of hazehash, blurhash, thumbhash, color, preview',
     )
   }
   return ALL_TYPES.filter((type) => selected.has(type))
@@ -113,6 +117,16 @@ export function resolveComponents(
 
 export function componentsLabel(components: Components): string {
   return components === 'auto' ? 'auto' : `${components.x}x${components.y}`
+}
+
+export function parseBudget(value: string): number {
+  const budget = Number(value)
+  if (!Number.isInteger(budget) || budget < MIN_HAZEHASH_BUDGET || budget > MAX_HAZEHASH_BUDGET) {
+    throw new ImageHashUsageError(
+      `--budget must be a whole number of bytes from ${MIN_HAZEHASH_BUDGET} to ${MAX_HAZEHASH_BUDGET} (got "${value}")`,
+    )
+  }
+  return budget
 }
 
 export function parseSampleSize(value: string): number {

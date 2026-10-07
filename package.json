@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/devtoolz",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A small toolbox of CLI commands that automate routine dev chores — strip comments/console.log, find dead exports, catch case-sensitivity import bugs before Linux CI does",
   "type": "module",
   "license": "MIT",
@@ -43,6 +43,7 @@
     "blurhash": "^2.0.5",
     "commander": "^13.1.0",
     "diff": "^7.0.0",
+    "hazehash": "^0.1.1",
     "ignore": "^6.0.2",
     "thumbhash": "^0.1.1",
     "typescript": "^5.7.3"

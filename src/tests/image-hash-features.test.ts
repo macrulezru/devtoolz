@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { decode as decodeHazehash, getAspectRatio, toBytes } from 'hazehash'
 import { runImageHash } from '../commands/image-hash/run.js'
 import { renderImageHashReport } from '../commands/image-hash/report.js'
 import { dominantColor } from '../commands/image-hash/hash.js'
@@ -13,6 +14,7 @@ import {
   ImageHashUsageError,
   formatAggregate,
   parseAggregate,
+  parseBudget,
   parseComponents,
   parseExtensions,
   parseFileList,
@@ -41,7 +43,7 @@ describe('image-hash parsing helpers', () => {
   it('parses a type list, both and all in canonical order', () => {
     expect(parseTypes('color,blurhash')).toEqual(['blurhash', 'color'])
     expect(parseTypes('both')).toEqual(['blurhash', 'thumbhash'])
-    expect(parseTypes('all')).toEqual(['blurhash', 'thumbhash', 'color', 'preview'])
+    expect(parseTypes('all')).toEqual(['hazehash', 'blurhash', 'thumbhash', 'color', 'preview'])
     expect(() => parseTypes('blurhash,md5')).toThrow(ImageHashUsageError)
     expect(() => parseTypes(' , ')).toThrow(ImageHashUsageError)
   })
@@ -502,5 +504,145 @@ describe('image-hash command line', () => {
     expect(existsSync(join(root, '.devtoolz-image-hash-cache.json'))).toBe(true)
     const second = cli(['img', '-t', 'color', '--cache', '-o', 'h.json', '--plain'])
     expect(second.stdout).toContain('2 from the cache')
+  })
+})
+
+describe('image-hash with hazehash', () => {
+  let root: string
+
+  beforeEach(async () => {
+    root = mkdtempSync(join(tmpdir(), 'devtoolz-image-hash-hz-'))
+    mkdirSync(join(root, 'img'), { recursive: true })
+    await solid(200, 100, 255, 0, 0).toFile(join(root, 'img', 'red.jpg'))
+    await solid(50, 80, 0, 0, 255).toFile(join(root, 'img', 'blue.png'))
+    await realSharp({
+      create: {
+        width: 60,
+        height: 40,
+        channels: 4,
+        background: { r: 10, g: 200, b: 10, alpha: 0.5 },
+      },
+    }).toFile(join(root, 'img', 'glass.png'))
+  })
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('parses hazehash in a type list and puts it before blurhash', () => {
+    expect(parseTypes('hazehash')).toEqual(['hazehash'])
+    expect(parseTypes('thumbhash,blurhash,hazehash')).toEqual(['hazehash', 'blurhash', 'thumbhash'])
+    expect(parseTypes('both')).toEqual(['blurhash', 'thumbhash'])
+  })
+
+  it('reads and validates the hazehash budget', () => {
+    expect(parseBudget('28')).toBe(28)
+    expect(parseBudget('7')).toBe(7)
+    expect(parseBudget('48')).toBe(48)
+    for (const bad of ['6', '49', '28.5', 'abc', '']) {
+      expect(() => parseBudget(bad)).toThrow(ImageHashUsageError)
+    }
+  })
+
+  it('hashes an image into a hazehash that decodes with the right proportions', async () => {
+    const report = await runImageHash({ paths: ['img/red.jpg'], cwd: root, types: ['hazehash'] })
+    const entry = report.entries[0]
+    expect(entry?.hazehash).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(entry?.blurhash).toBeUndefined()
+    const hash = entry?.hazehash as string
+    expect(toBytes(hash).length).toBeLessThanOrEqual(28)
+    expect(getAspectRatio(hash)).toBeCloseTo(2, 0)
+    const { data } = decodeHazehash(hash)
+    expect(data[0]).toBeGreaterThan(200)
+    expect(data[2]).toBeLessThan(60)
+  })
+
+  it('honors --budget', async () => {
+    const options = { paths: ['img/red.jpg'], cwd: root, types: ['hazehash' as const] }
+    const small = await runImageHash({ ...options, budget: 16 })
+    const large = await runImageHash({ ...options, budget: 40 })
+    expect(toBytes(small.entries[0]?.hazehash as string).length).toBeLessThanOrEqual(16)
+    expect(toBytes(large.entries[0]?.hazehash as string).length).toBeLessThanOrEqual(40)
+  })
+
+  it('keeps hazehash first in every output format', async () => {
+    const report = await runImageHash({
+      paths: ['img/red.jpg'],
+      cwd: root,
+      types: ['hazehash', 'blurhash', 'thumbhash'],
+      format: 'csv',
+    })
+    expect(report.stdout?.split('\n')[0]).toBe('file,width,height,hazehash,blurhash,thumbhash')
+    const json = await runImageHash({
+      paths: ['img/red.jpg'],
+      cwd: root,
+      types: parseTypes('thumbhash,hazehash'),
+    })
+    const record = JSON.parse(json.stdout ?? '{}')['img/red.jpg']
+    expect(Object.keys(record)).toEqual(['width', 'height', 'hazehash', 'thumbhash'])
+  })
+
+  it('recomputes cached images when the budget changes, not otherwise', async () => {
+    const base = {
+      paths: ['img'],
+      cwd: root,
+      types: ['hazehash' as const],
+      cache: '.cache.json',
+      recursive: true,
+    }
+    await runImageHash({ ...base })
+    const same = await runImageHash({ ...base })
+    expect(same.cached).toBe(3)
+    const changed = await runImageHash({ ...base, budget: 20 })
+    expect(changed.cached).toBe(0)
+  })
+
+  it('stores the transparency of an image in the hash', async () => {
+    const report = await runImageHash({ paths: ['img/glass.png'], cwd: root, types: ['hazehash'] })
+    const hash = report.entries[0]?.hazehash as string
+    const alpha = decodeHazehash(hash).data[3] as number
+    expect(alpha).toBeGreaterThan(90)
+    expect(alpha).toBeLessThan(170)
+  })
+
+  it('explains a budget that is too small for an image with transparency', async () => {
+    const report = await runImageHash({
+      paths: ['img/glass.png', 'img/red.jpg'],
+      cwd: root,
+      types: ['hazehash'],
+      budget: 8,
+    })
+    expect(report.errors).toHaveLength(1)
+    expect(report.errors[0]?.file).toBe('img/glass.png')
+    expect(report.errors[0]?.message).toMatch(/budget is too small.*at least 9 bytes/)
+    expect(report.entries.map((e) => e.file)).toEqual(['img/red.jpg'])
+  })
+
+  it('shows a HazeHash column in the dry-run table, before BlurHash', async () => {
+    const report = await runImageHash({
+      paths: ['img/red.jpg'],
+      cwd: root,
+      types: ['hazehash', 'blurhash'],
+      dryRun: true,
+    })
+    const text = renderImageHashReport(report, { plain: true })
+    expect(text).toContain('HazeHash')
+    expect(text.indexOf('HazeHash')).toBeLessThan(text.indexOf('BlurHash'))
+  })
+
+  it('takes -t hazehash and --budget on the command line, and rejects a bad budget', () => {
+    const run = (args: string[]) =>
+      spawnSync(process.execPath, ['--import', tsxLoader, cliPath, 'image-hash', ...args], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, NO_COLOR: '', FORCE_COLOR: '' },
+      })
+    const ok = run(['img/red.jpg', '-t', 'hazehash', '--budget', '20'])
+    expect(ok.status).toBe(0)
+    const hash = JSON.parse(ok.stdout)['img/red.jpg'].hazehash as string
+    expect(toBytes(hash).length).toBeLessThanOrEqual(20)
+    const bad = run(['img/red.jpg', '-t', 'hazehash', '--budget', '3'])
+    expect(bad.status).toBe(2)
+    expect(bad.stderr).toMatch(/--budget must be a whole number of bytes from 7 to 48/)
   })
 })

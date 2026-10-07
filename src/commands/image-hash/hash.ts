@@ -1,18 +1,26 @@
 import { encode as encodeBlurhash } from 'blurhash'
+import { encodeToString as encodeHazehash } from 'hazehash/encode'
 import { rgbaToThumbHash, thumbHashToRGBA } from 'thumbhash'
-import { resolveComponents, type Components, type HashType } from './core.js'
+import {
+  DEFAULT_HAZEHASH_BUDGET,
+  resolveComponents,
+  type Components,
+  type HashType,
+} from './core.js'
 import type { SharpFactory, SharpInputOptions } from './sharp-loader.js'
 
 export interface ComputeOptions {
   types: HashType[]
   size: number
   components: Components
+  budget?: number
   maxPixels?: number
 }
 
 export interface ComputedHashes {
   width: number
   height: number
+  hazehash?: string
   blurhash?: string
   thumbhash?: string
   color?: string
@@ -55,6 +63,9 @@ export function friendlyMessage(error: unknown, maxPixels: number | undefined): 
     const limit = maxPixels === undefined ? 'the default limit' : `${maxPixels} pixels`
     return `image is larger than ${limit} — raise it with --max-pixels (0 removes the limit)`
   }
+  if (/BudgetTooSmall/.test(message)) {
+    return 'the hazehash --budget is too small for this image (an image with transparency needs at least 9 bytes)'
+  }
   if (/unsupported image format|corrupt header|bad seek|not a known file format/i.test(message)) {
     return 'not a readable image — the file is corrupt or in an unsupported format'
   }
@@ -90,6 +101,13 @@ export async function computeHashes(
   const result: ComputedHashes = {
     width: width || info.width,
     height: height || info.height,
+  }
+
+  if (options.types.includes('hazehash')) {
+    result.hazehash = encodeHazehash(
+      { data, width: info.width, height: info.height },
+      { budget: options.budget ?? DEFAULT_HAZEHASH_BUDGET },
+    )
   }
 
   if (options.types.includes('blurhash')) {

@@ -5,6 +5,7 @@ import { ALL_TYPES, type HashType } from './core.js'
 import type { ImageHashReport } from './run.js'
 
 const TYPE_LABEL: Record<HashType, string> = {
+  hazehash: 'HazeHash',
   blurhash: 'BlurHash',
   thumbhash: 'ThumbHash',
   color: 'Color',
@@ -29,6 +30,7 @@ function imageHashTable(report: ImageHashReport, options: VibesOptions): string[
   const s = createStyle(options)
   const types = hashTypesIn(report)
   const typeStyle: Record<HashType, (text: string) => string> = {
+    hazehash: s.value,
     blurhash: s.name,
     thumbhash: s.accent,
     color: s.value,

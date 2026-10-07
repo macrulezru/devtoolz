@@ -41,9 +41,13 @@ import { runImageHash } from './commands/image-hash/run.js'
 import { renderImageHashReport } from './commands/image-hash/report.js'
 import {
   DEFAULT_CACHE_FILE,
+  DEFAULT_HAZEHASH_BUDGET,
   DEFAULT_IMAGE_EXTENSIONS,
   ImageHashUsageError,
+  MAX_HAZEHASH_BUDGET,
+  MIN_HAZEHASH_BUDGET,
   OUTPUT_FORMATS,
+  parseBudget,
   parseComponents,
   parseExtensions,
   parseFileList,
@@ -1004,7 +1008,7 @@ program
 program
   .command('image-hash')
   .description(
-    'Generate blurhash/thumbhash placeholders (and dominant color, tiny preview) for raster images — to stdout, one file, or a file per image',
+    'Generate hazehash/blurhash/thumbhash placeholders (and dominant color, tiny preview) for raster images — to stdout, one file, or a file per image',
   )
   .argument(
     '[paths...]',
@@ -1031,8 +1035,13 @@ program
   .option('--no-respect-gitignore', "don't also honor the project's .gitignore")
   .option(
     '-t, --type <list>',
-    'what to generate, comma-separated: blurhash, thumbhash, color (dominant), preview (tiny PNG data URI); both = blurhash+thumbhash, all = everything',
+    'what to generate, comma-separated: hazehash, blurhash, thumbhash, color (dominant), preview (tiny PNG data URI); both = blurhash+thumbhash, all = everything',
     'both',
+  )
+  .option(
+    '--budget <bytes>',
+    `hazehash: maximum size of one hash in bytes, header included, ${MIN_HAZEHASH_BUDGET}-${MAX_HAZEHASH_BUDGET} (16-48 is the tuned range)`,
+    String(DEFAULT_HAZEHASH_BUDGET),
   )
   .option(
     '--components <XxY|auto>',
@@ -1059,7 +1068,7 @@ program
   .option('--out-dir <dir>', 'write the per-image files into this directory (implies --per-file)')
   .option(
     '--suffix <text>',
-    'per-image file name suffix after the image file name, {type} = blurhash/thumbhash/hash (default: .{type})',
+    'per-image file name suffix after the image file name, {type} = hazehash/blurhash/thumbhash/hash (default: .{type})',
   )
   .option('--out-ext <ext>', 'per-image file extension (default: by --format, plain = .txt)')
   .option(
@@ -1090,6 +1099,7 @@ program
         respectGitignore: boolean
         type: string
         components: string
+        budget: string
         size: string
         maxPixels?: string
         format: string
@@ -1132,6 +1142,7 @@ program
           ignoreGlobs: options.ignore,
           respectGitignore: options.respectGitignore,
           components: parseComponents(options.components),
+          budget: parseBudget(options.budget),
           size: parseSampleSize(options.size),
           ...(options.maxPixels !== undefined
             ? { maxPixels: parseMaxPixels(options.maxPixels) }
