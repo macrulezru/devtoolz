@@ -4,6 +4,7 @@ import { walk } from '../../utils/walk.js'
 import {
   ALL_TYPES,
   DEFAULT_BLURHASH_COMPONENTS,
+  DEFAULT_HAZEHASH_BUDGET,
   DEFAULT_EXPORT_NAME,
   DEFAULT_IMAGE_EXTENSIONS,
   DEFAULT_SAMPLE_SIZE,
@@ -47,6 +48,7 @@ export interface ImageHashRunOptions {
   ignoreGlobs?: string[]
   respectGitignore?: boolean
   components?: Components
+  budget?: number
   size?: number
   maxPixels?: number
   format?: OutputFormat
@@ -242,7 +244,8 @@ export async function runImageHash(options: ImageHashRunOptions): Promise<ImageH
   const outExtension = normalizeOutExtension(options.outExtension, format)
   const size = options.size ?? DEFAULT_SAMPLE_SIZE
   const components = options.components ?? DEFAULT_BLURHASH_COMPONENTS
-  const params = `${size}|${componentsLabel(components)}`
+  const budget = options.budget ?? DEFAULT_HAZEHASH_BUDGET
+  const params = `${size}|${componentsLabel(components)}|${budget}`
   const keyBase = resolve(options.cwd, options.keyBase ?? '.')
   const keyPrefix = options.keyPrefix ?? ''
   const keyOf = (source: SourceImage): string =>
@@ -272,6 +275,7 @@ export async function runImageHash(options: ImageHashRunOptions): Promise<ImageH
     types: options.types,
     size,
     components,
+    budget,
     ...(options.maxPixels !== undefined ? { maxPixels: options.maxPixels } : {}),
   }
 

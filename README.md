@@ -127,7 +127,8 @@ looking for is never touched.
   `.vue` files get an isolated per-file check (same technique as
   `readme-check`'s own virtual-file typechecking) — a plain
   `ts.Program` can't include `.vue` in a whole-project run at all.
-- **`image-hash`** — generates [blurhash](https://blurha.sh) and/or
+- **`image-hash`** — generates [hazehash](https://github.com/macrulezru/hazehash),
+  [blurhash](https://blurha.sh) and/or
   [thumbhash](https://evanw.github.io/thumbhash/) placeholders for raster
   images (jpg, png, webp, gif, avif, tiff). Takes files and/or
   directories — several of each, comma-separated too — and `-r` walks
@@ -136,7 +137,9 @@ looking for is never touched.
   file per image (`photo.jpg` → `photo.jpg.blurhash.txt`, with
   `--suffix` and `--out-ext` to rename). Formats: `json`, `plain` (just
   the hash text, no newline), `csv`, and `ts`/`js` modules you can import
-  straight into the app. Besides the two hashes it can produce the
+  straight into the app. Without `-t` it makes blurhash and thumbhash; `-t hazehash` adds the
+  more compact and more accurate hazehash (`--budget` sets its size in
+  bytes, 28 by default). Besides the hashes it can produce the
   dominant color and a tiny PNG preview (`-t all`), accepts `http(s)`
   URLs and path lists from a file or stdin, and can keep an output file in
   sync: `--cache` skips unchanged images, `--update --prune` merges into
@@ -248,6 +251,7 @@ devtoolz orphan-tests src                      # test files whose source disappe
 devtoolz stale-ts-ignore                       # find @ts-ignore comments suppressing nothing
 
 devtoolz image-hash public/img                 # blurhash + thumbhash of every image, as JSON on stdout
+devtoolz image-hash public/img -r -t hazehash --budget 24 -o hashes.json   # hazehash of 24 bytes at most
 devtoolz image-hash a.jpg,b.png,photos -r -t blurhash -f csv -o hashes.csv
 devtoolz image-hash public/img -r -f plain --per-file   # photo.jpg.blurhash.txt + photo.jpg.thumbhash.txt
 devtoolz image-hash public/img -r -f ts -t thumbhash -o src/placeholders.ts --name placeholders
