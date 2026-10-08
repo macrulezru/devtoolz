@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +13,15 @@ import {
   matchBoxOrientation,
 } from '../commands/image-batch/geometry.js'
 import type { SharpFn } from '../commands/image-batch/plan.js'
+import {
+  completeSharpen,
+  parseSharpenFields,
+  sharpenParams,
+} from '../commands/image-batch/sharpen.js'
+import {
+  BUILT_IN_SHARPEN_PRESETS,
+  attachSharpenPresets,
+} from '../commands/image-batch/sharpen-presets.js'
 import { runImageBatch, type ImageBatchOptions } from '../commands/image-batch/run.js'
 
 const sharp = createRequire(import.meta.url)('sharp') as SharpFn &
@@ -456,5 +465,166 @@ describe('sharpening', () => {
     }
     expect(diff(none, low)).toBeGreaterThan(0)
     expect(diff(none, high)).toBeGreaterThan(diff(none, low))
+  })
+})
+
+describe('sharpening fine settings and presets', () => {
+  const base = { id: 'a', widths: [300], formats: ['png'] }
+
+  const withPresets = (config: unknown, presets: Record<string, unknown>, extra?: unknown) => {
+    mkdirSync(join(root, '.git'), { recursive: true })
+    const dir = join(root, '.devtoolz', 'image-batch', 'sharpen')
+    mkdirSync(dir, { recursive: true })
+    for (const [name, value] of Object.entries(presets)) {
+      writeFileSync(join(dir, `${name}.json`), JSON.stringify(value))
+    }
+    return attachSharpenPresets(parseConfig(config), {
+      cwd: root,
+      globalDir: join(root, 'no-global'),
+      extra: [extra as never],
+    })
+  }
+
+  it('checks every fine setting against its range and names it', () => {
+    const bad = (sharpen: unknown) => () => parseConfig({ outputs: [{ ...base, sharpen }] })
+    expect(bad({ radius: 0 })).toThrow(/sharpen\.radius: expected a number from 0\.000001 to 10/)
+    expect(bad({ radius: 11 })).toThrow(/radius/)
+    expect(bad({ flat: -1 })).toThrow(/sharpen\.flat: expected a number from 0 to 1000000/)
+    expect(bad({ jagged: 'x' })).toThrow(/sharpen\.jagged/)
+    expect(bad({ threshold: 2_000_000 })).toThrow(/sharpen\.threshold/)
+    expect(bad({})).toThrow(/at least one of/)
+    expect(bad({ strength: 3 })).toThrow(/unknown key "strength"/)
+    expect(bad(5)).toThrow(/expected a preset name or an object/)
+  })
+
+  it('sends the fine settings to sharp and keeps the table value for the rest', () => {
+    expect(sharpenParams(completeSharpen({ for: 'screen' }))).toEqual({ sigma: 0.6, m1: 1, m2: 3 })
+    expect(sharpenParams(completeSharpen({ for: 'glossy', amount: 'high' }))).toEqual({
+      sigma: 1.4,
+      m1: 1.8,
+      m2: 5,
+    })
+    expect(
+      sharpenParams(completeSharpen({ radius: 2.5, flat: 0.2, jagged: 7, threshold: 4 })),
+    ).toEqual({ sigma: 2.5, m1: 0.2, m2: 7, x1: 4 })
+  })
+
+  it('lets a field override the table value, field by field across layers', () => {
+    const config = parseConfig({
+      defaults: { sharpen: { for: 'matte', radius: 1.5 } },
+      outputs: [{ ...base, sharpen: { amount: 'high' } }],
+    })
+    const recipe = resolveRecipe(config, config.outputs[0]!, [{ sharpen: { jagged: 9 } }])
+    expect(recipe.sharpen).toEqual({
+      for: 'matte',
+      amount: 'high',
+      radius: 1.5,
+      jagged: 9,
+    })
+  })
+
+  it('expands a preset, lets the recipe override it, and a new preset starts afresh', () => {
+    const config = withPresets(
+      {
+        defaults: { sharpen: 'base' },
+        outputs: [
+          { ...base, id: 'plain' },
+          { ...base, id: 'tuned', sharpen: { preset: 'base', amount: 'low' } },
+          { ...base, id: 'other', sharpen: 'second' },
+        ],
+      },
+      {
+        base: { for: 'glossy', amount: 'high', radius: 1.1 },
+        second: { for: 'screen' },
+      },
+    )
+    const sharpen = (index: number) => resolveRecipe(config, config.outputs[index]!).sharpen
+    expect(sharpen(0)).toEqual({ for: 'glossy', amount: 'high', radius: 1.1 })
+    expect(sharpen(1)).toEqual({ for: 'glossy', amount: 'low', radius: 1.1 })
+    expect(sharpen(2)).toEqual({ for: 'screen', amount: 'standard' })
+  })
+
+  it('takes a preset named by a flag-style override too', () => {
+    const config = withPresets(
+      { outputs: [base] },
+      { crisp: { for: 'matte', flat: 2 } },
+      {
+        preset: 'crisp',
+      },
+    )
+    expect(
+      resolveRecipe(config, config.outputs[0]!, [{ sharpen: { preset: 'crisp' } }]).sharpen,
+    ).toEqual({
+      for: 'matte',
+      amount: 'standard',
+      flat: 2,
+    })
+  })
+
+  it('reports a missing preset with the names that exist', () => {
+    expect(() =>
+      withPresets({ outputs: [{ ...base, sharpen: 'crsip' }] }, { crisp: { for: 'screen' } }),
+    ).toThrow(/no sharpen preset named "crsip".*Available: crisp/)
+  })
+
+  it('offers the built-in presets when a name does not exist', () => {
+    expect(() => withPresets({ outputs: [{ ...base, sharpen: 'x' }] }, {})).toThrow(
+      /Available: web-light, web-crisp, web-detail, thumbnail, print-matte, print-glossy/,
+    )
+  })
+
+  it('resolves a built-in preset, and a project file of the same name wins', () => {
+    const config = withPresets({ outputs: [{ ...base, sharpen: 'web-detail' }] }, {})
+    expect(resolveRecipe(config, config.outputs[0]!).sharpen).toEqual({
+      for: 'screen',
+      amount: 'high',
+      radius: 0.8,
+    })
+    const own = withPresets(
+      { outputs: [{ ...base, sharpen: 'web-detail' }] },
+      { 'web-detail': { for: 'glossy' } },
+    )
+    expect(resolveRecipe(own, own.outputs[0]!).sharpen).toEqual({
+      for: 'glossy',
+      amount: 'standard',
+    })
+  })
+
+  it('keeps every built-in preset valid', () => {
+    for (const [name, preset] of Object.entries(BUILT_IN_SHARPEN_PRESETS)) {
+      expect(() => parseSharpenFields({ ...preset.fields }, name, false)).not.toThrow()
+      expect(preset.description).toBeTruthy()
+    }
+  })
+
+  it('rejects a broken preset file with its path', () => {
+    expect(() =>
+      withPresets({ outputs: [{ ...base, sharpen: 'bad' }] }, { bad: { radius: 99 } }),
+    ).toThrow(/bad\.json\.radius: expected a number from 0\.000001 to 10/)
+    expect(() =>
+      withPresets({ outputs: [{ ...base, sharpen: 'nested' }] }, { nested: { preset: 'other' } }),
+    ).toThrow(/unknown key "preset"/)
+  })
+
+  it('sharpens a stronger fine setting more than a weaker one', async () => {
+    const make = async (sharpen: unknown, n: number) => {
+      const dir = join(root, `fine-${n}`)
+      const report = await run(
+        { outputs: [{ ...base, ...(sharpen ? { sharpen } : {}) }] },
+        { out: dir },
+      )
+      expect(report.counts.error).toBe(0)
+      const result = report.results.find((r) => r.source === 'land.png')!
+      return sharp(join(dir, result.output)).raw().toBuffer()
+    }
+    const diff = (a: Buffer, b: Buffer) => {
+      let total = 0
+      for (let i = 0; i < a.length; i++) total += Math.abs((a[i] ?? 0) - (b[i] ?? 0))
+      return total
+    }
+    const weak = await make({ radius: 0.5, flat: 0.2, jagged: 0.5 }, 1)
+    const strong = await make({ radius: 2, flat: 5, jagged: 8 }, 2)
+    const none = await make(undefined, 3)
+    expect(diff(none, strong)).toBeGreaterThan(diff(none, weak))
   })
 })

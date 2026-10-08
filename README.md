@@ -178,7 +178,11 @@ looking for is never touched.
   `--dominant-color` with `--emit <file>` write a manifest of everything
   produced, with the placeholders. `init` creates configs, and `config` shows, edits,
   copies and deletes them (`.devtoolz/image-batch/` in the project or
-  `~/.devtoolz/image-batch/` for all projects). Uses `sharp` too — see
+  `~/.devtoolz/image-batch/` for all projects). `sharpen` adds output
+  sharpening after the resize — by target and amount, with `radius`,
+  `flat`, `jagged` and `threshold` for fine control — and `image-batch
+sharpen` saves such settings as presets that configs and `--sharpen <name>`
+  use by name. Uses `sharp` too — see
   Requirements.
 - **`full-check`** — runs all thirteen other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
@@ -306,6 +310,7 @@ devtoolz image-batch restore .image-batch-backup/20261007-233706  # put the orig
 devtoolz image-batch ./photos -r --beside -w 400 -f webp         # results next to each source
 devtoolz image-batch init                      # create a config with a few questions
 devtoolz image-batch config                    # pick a config: apply, show, edit, copy, delete
+devtoolz image-batch sharpen new               # save a sharpening preset, then --sharpen <name>
 
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one

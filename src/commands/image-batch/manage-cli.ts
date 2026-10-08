@@ -4,7 +4,16 @@ import { createStyle } from '../../format/style.js'
 import { defaultTerminal } from '../../utils/tty.js'
 import { splitList } from '../../utils/split-list.js'
 import { ImageBatchUsageError } from './errors.js'
-import { parseSharpenFlags } from './sharpen.js'
+import {
+  listSharpenRows,
+  manageSharpenPresets,
+  removeSharpenPreset,
+  renderSharpenTable,
+  runSharpenNew,
+  sharpenLocationFor,
+  showSharpenPreset,
+} from './sharpen-manage.js'
+import { addSharpenFlags, parseSharpenFlags, type SharpenFlagOptions } from './sharpen.js'
 import { renderRestoreReport, runRestore } from './restore.js'
 import {
   configPathFor,
@@ -74,20 +83,20 @@ function sizeFields(options: SizeFlags): Record<string, unknown> | undefined {
 }
 
 type InitCliOptions = CommonOptions &
-  SizeFlags & {
+  SizeFlags &
+  SharpenFlagOptions & {
     name?: string
     global?: boolean
     formats?: string
     quality?: string
     fileName?: string
-    sharpenFor?: string
-    sharpenAmount?: string
     thumbnail?: boolean
     hazehash?: boolean
     force: boolean
   }
 
 function addInitOptions(command: Command): Command {
+  addSharpenFlags(command)
   return command
     .option('--cwd <path>', 'project folder the config is saved in', process.cwd())
     .option('--name <name>', 'name of the config (asked when omitted)')
@@ -107,8 +116,6 @@ function addInitOptions(command: Command): Command {
       '--file-name <template>',
       'file name template of the main recipe, e.g. {dir}/{name}-{width}w.{format} (default: chosen by the size method)',
     )
-    .option('--sharpen-for <target>', 'sharpen the results for: screen, matte or glossy')
-    .option('--sharpen-amount <amount>', 'sharpening amount: low, standard or high')
     .option('--thumbnail', 'add a 200x200 cropped thumbnail recipe')
     .option('--hazehash', 'compute a hazehash for the --emit manifest')
     .option('--force', 'replace a config of the same name', false)
@@ -119,7 +126,7 @@ function addInitOptions(command: Command): Command {
 async function initAction(options: InitCliOptions): Promise<void> {
   await guarded(async () => {
     const fields = sizeFields(options)
-    const sharpen = parseSharpenFlags(options.sharpenFor, options.sharpenAmount)
+    const sharpen = parseSharpenFlags(options)
     await runInit(envFrom(options), {
       ...(options.name !== undefined ? { name: options.name } : {}),
       ...(options.global !== undefined ? { global: options.global } : {}),
@@ -233,6 +240,124 @@ export function registerImageBatchManagement(parent: Command): void {
           throw new ImageBatchUsageError(`this deletes ${location.path} — pass --yes to confirm`)
         }
         const kept = removeConfigFile(location, options.force)
+        console.log(
+          options.force ? `Deleted ${location.path}` : `Deleted ${location.path} (backup: ${kept})`,
+        )
+      }),
+    )
+
+  const sharpen = parent
+    .command('sharpen')
+    .description(
+      'Manage saved sharpening presets that configs and runs can use: in a terminal pick one to show, edit, copy or delete (subcommands: new, list, show, rm)',
+    )
+    .option('--cwd <path>', 'project folder the presets are looked up from', process.cwd())
+    .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+    .option('--color', 'force colored output even when piped or in CI', false)
+    .action(async (options: CommonOptions) =>
+      guarded(async () => manageSharpenPresets(envFrom(options))),
+    )
+
+  addSharpenFlags(
+    sharpen
+      .command('new')
+      .description('Create a sharpening preset (a short wizard, or the flags below)')
+      .option('--cwd <path>', 'project folder the preset is saved in', process.cwd())
+      .option('--name <name>', 'name of the preset (asked when omitted)')
+      .option('--global', 'save it for all projects instead of this one')
+      .option('--description <text>', 'a note shown in the list')
+      .option('--force', 'replace a preset of the same name', false)
+      .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+      .option('--color', 'force colored output even when piped or in CI', false),
+    false,
+  ).action(
+    async (
+      options: CommonOptions &
+        SharpenFlagOptions & {
+          name?: string
+          global?: boolean
+          description?: string
+          force: boolean
+        },
+    ) =>
+      guarded(async () => {
+        const fields = parseSharpenFlags(options)
+        await runSharpenNew(envFrom(options), {
+          ...(options.name !== undefined ? { name: options.name } : {}),
+          ...(options.global !== undefined ? { global: options.global } : {}),
+          ...(options.description !== undefined ? { description: options.description } : {}),
+          ...(fields ? { fields } : {}),
+          force: options.force,
+        })
+      }),
+  )
+
+  sharpen
+    .command('list')
+    .description('Print a table of the saved sharpening presets')
+    .option('--cwd <path>', 'project folder the presets are looked up from', process.cwd())
+    .option('--json', 'machine-readable output', false)
+    .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+    .option('--color', 'force colored output even when piped or in CI', false)
+    .action(async (options: CommonOptions) =>
+      guarded(async () => {
+        const env = envFrom(options)
+        const rows = listSharpenRows(env)
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              rows.map((row) => ({
+                name: row.location.name,
+                scope: row.location.scope,
+                path: row.location.path,
+                description: row.description,
+                ...(row.fields ?? {}),
+                error: row.error,
+              })),
+              null,
+              2,
+            ),
+          )
+          return
+        }
+        const style = createStyle(env.style)
+        console.log(
+          rows.length === 0
+            ? style.warn(
+                'No sharpen presets found — create one with `devtoolz image-batch sharpen new`.',
+              )
+            : renderSharpenTable(rows, env.style).join('\n'),
+        )
+      }),
+    )
+
+  sharpen
+    .command('show')
+    .argument('<name>', 'preset name')
+    .description('Print the settings of a preset and the values sharp receives')
+    .option('--cwd <path>', 'project folder the presets are looked up from', process.cwd())
+    .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+    .option('--color', 'force colored output even when piped or in CI', false)
+    .action(async (name: string, options: CommonOptions) =>
+      guarded(async () => showSharpenPreset(envFrom(options), name)),
+    )
+
+  sharpen
+    .command('rm')
+    .argument('<name>', 'preset name')
+    .description('Delete a preset (a .bak copy is kept unless --force)')
+    .option('--cwd <path>', 'project folder the presets are looked up from', process.cwd())
+    .option('-y, --yes', 'do not ask for confirmation', false)
+    .option('--force', 'delete for good, without a .bak copy', false)
+    .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
+    .option('--color', 'force colored output even when piped or in CI', false)
+    .action(async (name: string, options: CommonOptions & { yes: boolean; force: boolean }) =>
+      guarded(async () => {
+        const location = sharpenLocationFor(envFrom(options), name)
+        if (!options.yes) {
+          throw new ImageBatchUsageError(`this deletes ${location.path} — pass --yes to confirm`)
+        }
+        const kept = removeSharpenPreset(location, options.force)
         console.log(
           options.force ? `Deleted ${location.path}` : `Deleted ${location.path} (backup: ${kept})`,
         )

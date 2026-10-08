@@ -21,12 +21,12 @@ import {
 import { ImageBatchUsageError } from './errors.js'
 import { FIT_MODES, parseSize, type Box, type Fit } from './geometry.js'
 import {
-  SHARPEN_AMOUNTS,
-  SHARPEN_TARGETS,
   completeSharpen,
-  type SharpenAmount,
+  expandSharpen,
+  parseSharpenLayer,
+  type SharpenFields,
+  type SharpenLayer,
   type SharpenSpec,
-  type SharpenTarget,
 } from './sharpen.js'
 import { defaultTemplate, parseTemplate, type TemplateToken } from './template.js'
 
@@ -132,7 +132,7 @@ export interface RecipeLayer extends CodecLayer {
   flip?: boolean
   flop?: boolean
   grayscale?: boolean
-  sharpen?: Partial<SharpenSpec>
+  sharpen?: SharpenLayer
   blur?: number
   flatten?: string | true
 }
@@ -156,6 +156,7 @@ export interface BatchConfig {
   outputs: RecipeLayer[]
   match: MatchRule[]
   placeholders?: PlaceholderSettings
+  sharpenPresets?: Record<string, SharpenFields>
 }
 
 export interface ResolvedRecipe {
@@ -433,29 +434,9 @@ export function parseRecipeLayer(
         }
         layer.rotate = value
         break
-      case 'sharpen': {
-        const object = expectObject(value, at)
-        checkKeys(object, ['for', 'amount'], at)
-        const spec: Partial<SharpenSpec> = {}
-        if (object.for !== undefined) {
-          if (!(SHARPEN_TARGETS as readonly unknown[]).includes(object.for)) {
-            throw new ImageBatchUsageError(
-              `${at}.for: expected one of ${SHARPEN_TARGETS.join(', ')}`,
-            )
-          }
-          spec.for = object.for as SharpenTarget
-        }
-        if (object.amount !== undefined) {
-          if (!(SHARPEN_AMOUNTS as readonly unknown[]).includes(object.amount)) {
-            throw new ImageBatchUsageError(
-              `${at}.amount: expected one of ${SHARPEN_AMOUNTS.join(', ')}`,
-            )
-          }
-          spec.amount = object.amount as SharpenAmount
-        }
-        layer.sharpen = spec
+      case 'sharpen':
+        layer.sharpen = parseSharpenLayer(value, at)
         break
-      }
       case 'blur':
         if (typeof value !== 'number' || !(value >= 0.3) || value > 1000) {
           throw new ImageBatchUsageError(`${at}: expected a sigma from 0.3 to 1000`)
@@ -636,7 +617,9 @@ export function resolveRecipe(
     for (const [key, value] of Object.entries(layer)) {
       if (key === 'codecs' || key === 'quality' || key === 'preset' || key === 'extends') continue
       if (key === 'sharpen' && value !== undefined) {
-        merged.sharpen = { ...merged.sharpen, ...(value as Partial<SharpenSpec>) }
+        const own = value as SharpenLayer
+        const expanded = expandSharpen(own, config.sharpenPresets, where)
+        merged.sharpen = own.preset !== undefined ? expanded : { ...merged.sharpen, ...expanded }
       } else if (value !== undefined) (merged as Record<string, unknown>)[key] = value
     }
   }

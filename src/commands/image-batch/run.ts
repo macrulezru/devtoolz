@@ -67,7 +67,8 @@ import {
   type SourceInfo,
 } from './plan.js'
 import { renderJob, writeAtomic } from './process.js'
-import type { SharpenSpec } from './sharpen.js'
+import type { SharpenLayer } from './sharpen.js'
+import { attachSharpenPresets } from './sharpen-presets.js'
 import { parseTemplate } from './template.js'
 
 export interface BatchOverrides {
@@ -85,7 +86,7 @@ export interface BatchOverrides {
   percent?: number[]
   matchOrientation?: boolean
   maxBytes?: number
-  sharpen?: Partial<SharpenSpec>
+  sharpen?: SharpenLayer
 }
 
 export interface BatchProgress {
@@ -126,6 +127,7 @@ export interface ImageBatchOptions {
   keyPrefix?: string
   cache?: string | false
   cacheBase?: string
+  globalDir?: string
   concurrency?: number
   maxPixels?: number
   dryRun?: boolean
@@ -342,7 +344,11 @@ export async function runImageBatch(options: ImageBatchOptions): Promise<ImageBa
   const io = options.io ?? defaultTerminal()
   const interactive = options.interactive ?? isInteractive(io)
   const style = options.style ?? {}
-  const config = options.config ?? emptyConfig()
+  const config = attachSharpenPresets(options.config ?? emptyConfig(), {
+    cwd,
+    ...(options.globalDir !== undefined ? { globalDir: options.globalDir } : {}),
+    extra: [options.overrides?.sharpen],
+  })
   const now = options.now ?? new Date()
   const placement = placementOf(options)
 
