@@ -27,6 +27,7 @@ export interface SharpImage {
   ensureAlpha(): SharpImage
   raw(): SharpImage
   png(options?: { compressionLevel?: number }): SharpImage
+  webp(options?: { quality?: number }): SharpImage
   toBuffer(): Promise<Uint8Array>
   toBuffer(options: { resolveWithObject: true }): Promise<RawImage>
 }

@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/devtoolz",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A small toolbox of CLI commands that automate routine dev chores — strip comments/console.log, find dead exports, catch case-sensitivity import bugs before Linux CI does",
   "type": "module",
   "license": "MIT",
@@ -29,12 +29,14 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && vite build --config ui/vite.config.ts",
+    "dev:ui": "tsx ui/dev.ts",
+    "dev:ui:client": "vite --config ui/vite.config.ts",
     "prepublishOnly": "npm run build",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p ui/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:fix": "prettier --write ."
@@ -50,13 +52,24 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",
+    "@macrulez/masonry-kit-vue": "^0.1.4",
+    "@types/d3-force": "^3.0.10",
     "@types/diff": "^6.0.0",
     "@types/node": "^20.14.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "d3-force": "^3.0.0",
     "eslint": "^9.20.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^17.13.0",
     "prettier": "^3.9.8",
+    "sass": "^1.105.1",
     "sharp": "^0.35.5",
+    "shiki": "^4.5.0",
     "tsx": "^4.19.2",
     "typescript-eslint": "^8.23.0",
-    "vitest": "^3.0.5"
+    "vite": "^7.3.7",
+    "vitest": "^3.0.5",
+    "vue": "^3.5.43",
+    "vue-tsc": "^3.3.12"
   }
 }

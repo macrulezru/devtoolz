@@ -45,7 +45,7 @@ import {
   type RecipeLayer,
 } from './config.js'
 import { ImageBatchAbortError, ImageBatchUsageError } from './errors.js'
-import type { Fit } from './geometry.js'
+import { parseSize, type Fit } from './geometry.js'
 import { BATCH_IMAGE_EXTENSIONS, collectInputs, type InputFile } from './inputs.js'
 import {
   createOverwriteResolver,
@@ -72,6 +72,7 @@ import { attachSharpenPresets } from './sharpen-presets.js'
 import { parseTemplate } from './template.js'
 
 export interface BatchOverrides {
+  size?: string
   widths?: number[]
   heights?: number[]
   formats?: string[]
@@ -158,7 +159,9 @@ export type JobStatus =
 
 export interface BatchJobResult {
   source: string
+  sourceAbs: string
   output: string
+  outputAbs: string
   recipe: string
   format: OutputFormatName
   width: number
@@ -225,6 +228,7 @@ function emptyCounts(): Record<JobStatus, number> {
 function overrideLayer(overrides: BatchOverrides | undefined): RecipeLayer[] {
   if (!overrides) return []
   const layer: RecipeLayer = {}
+  if (overrides.size) layer.size = parseSize(overrides.size, 'size')
   if (overrides.widths) layer.widths = overrides.widths
   if (overrides.heights) layer.heights = overrides.heights
   if (overrides.longEdge) layer.longEdge = overrides.longEdge
@@ -650,7 +654,9 @@ export async function runImageBatch(options: ImageBatchOptions): Promise<ImageBa
 
   const baseResult = (job: PlannedJob): BatchJobResult => ({
     source: job.source.file.rel,
+    sourceAbs: job.source.file.abs,
     output: job.outRel,
+    outputAbs: job.outAbs,
     recipe: job.recipeLabel,
     format: job.format,
     width: job.width,

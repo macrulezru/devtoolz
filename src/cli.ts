@@ -57,6 +57,7 @@ import {
   parseTypes,
 } from './commands/image-hash/core.js'
 import { registerImageBatch } from './commands/image-batch/cli.js'
+import { registerUi } from './commands/ui/cli.js'
 import { createStyle } from './format/style.js'
 
 interface HelpRow {
@@ -1318,5 +1319,6 @@ program
   )
 
 registerImageBatch(program)
+registerUi(program)
 
 program.parse(process.argv)
