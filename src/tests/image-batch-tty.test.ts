@@ -16,6 +16,7 @@ import {
   runInit,
   type ManageEnv,
 } from '../commands/image-batch/manage.js'
+import { manageSharpenPresets, runSharpenNew } from '../commands/image-batch/sharpen-manage.js'
 import { createOverwriteResolver } from '../commands/image-batch/overwrite.js'
 import type { SharpFn } from '../commands/image-batch/plan.js'
 import { runImageBatch } from '../commands/image-batch/run.js'
@@ -502,6 +503,85 @@ describe('config management', () => {
     ])
     const written = JSON.parse(readFileSync(await runInit(envWith(terminal), {}), 'utf8'))
     expect(written.outputs[0].sharpen).toEqual({ for: 'glossy', amount: 'high' })
+  })
+
+  describe('sharpen presets', () => {
+    const presetDir = () => join(root, 'proj', '.devtoolz', 'image-batch', 'sharpen')
+    const writePreset = (name: string, value: unknown) => {
+      mkdirSync(presetDir(), { recursive: true })
+      writeFileSync(join(presetDir(), `${name}.json`), JSON.stringify(value))
+    }
+
+    it('sharpen new asks for the target and amount, and for the fine settings when wanted', async () => {
+      const terminal = fakeTerminal([
+        ...[ENTER, ENTER, DOWN, DOWN, ENTER, DOWN, DOWN, ENTER, 'y'],
+        ...['1', '.', '5', ENTER, ENTER, ENTER, '3', ENTER],
+      ])
+      const path = await runSharpenNew(envWith(terminal), {})
+      expect(path.endsWith('web-crisp.json')).toBe(true)
+      expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+        for: 'glossy',
+        amount: 'high',
+        radius: 1.5,
+        threshold: 3,
+      })
+    })
+
+    it('asks again when a fine setting is out of range', async () => {
+      const terminal = fakeTerminal([
+        ...[ENTER, ENTER, ENTER, ENTER, 'y'],
+        ...['5', '0', ENTER, '2', ENTER, ENTER, ENTER, ENTER],
+      ])
+      const path = await runSharpenNew(envWith(terminal), {})
+      expect(JSON.parse(readFileSync(path, 'utf8')).radius).toBe(2)
+      expect(logged.join('\n')).toContain('radius: expected a number from 0.000001 to 10')
+    })
+
+    it('init offers the saved presets after the three targets', async () => {
+      writePreset('crisp', { for: 'screen', radius: 0.8 })
+      const terminal = fakeTerminal([
+        ...[ENTER, ENTER, ENTER, ENTER, ENTER, DOWN, DOWN, ENTER, ENTER],
+        ...[DOWN, DOWN, DOWN, DOWN, ENTER, 'n', 'n'],
+      ])
+      const path = await runInit(envWith(terminal), {})
+      expect(JSON.parse(readFileSync(path, 'utf8')).outputs[0].sharpen).toBe('crisp')
+    })
+
+    it('the manager edits a preset with the same questions', async () => {
+      writePreset('crisp', { for: 'screen', description: 'web' })
+      const terminal = fakeTerminal([...[ENTER, DOWN, ENTER, DOWN, ENTER, DOWN, ENTER, 'n'], 'q'])
+      await manageSharpenPresets(envWith(terminal))
+      expect(JSON.parse(readFileSync(join(presetDir(), 'crisp.json'), 'utf8'))).toEqual({
+        description: 'web',
+        for: 'matte',
+        amount: 'standard',
+      })
+    })
+
+    it('the manager deletes a preset but keeps a .bak copy', async () => {
+      writePreset('crisp', { for: 'screen' })
+      const terminal = fakeTerminal([ENTER, DOWN, DOWN, DOWN, ENTER, 'y', 'q'])
+      await manageSharpenPresets(envWith(terminal))
+      expect(existsSync(join(presetDir(), 'crisp.json'))).toBe(false)
+      expect(existsSync(join(presetDir(), 'crisp.json.bak'))).toBe(true)
+    })
+
+    it('the manager offers only show and copy for a built-in preset', async () => {
+      const terminal = fakeTerminal([ENTER, DOWN, ENTER, 'q'])
+      await manageSharpenPresets(envWith(terminal))
+      const copy = join(presetDir(), 'web-light.json')
+      expect(JSON.parse(readFileSync(copy, 'utf8'))).toMatchObject({ for: 'screen', amount: 'low' })
+      expect(terminal.written).not.toContain('Delete')
+      expect(terminal.written).not.toContain('Edit')
+    })
+
+    it('the manager copies a project preset to the global folder', async () => {
+      writePreset('crisp', { for: 'screen' })
+      const terminal = fakeTerminal([ENTER, DOWN, DOWN, ENTER, 'q'])
+      await manageSharpenPresets(envWith(terminal))
+      const copy = join(root, 'home', '.devtoolz', 'image-batch', 'sharpen', 'crisp.json')
+      expect(JSON.parse(readFileSync(copy, 'utf8'))).toEqual({ for: 'screen' })
+    })
   })
 
   it('init offers the formats as a checklist with the usual three ticked', async () => {

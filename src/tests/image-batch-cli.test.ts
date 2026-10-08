@@ -264,7 +264,7 @@ describe('image-batch init and config', { timeout: 120_000 }, () => {
     })
     const bad = cli(['init', '--name', 'bad', '--sharpen-for', 'paper', '--plain'])
     expect(bad.status).toBe(2)
-    expect(bad.stderr).toMatch(/--sharpen-for must be one of screen, matte, glossy/)
+    expect(bad.stderr).toContain('--sharpen-for: expected one of screen, matte, glossy')
   })
 
   it('init --global saves under the home folder', () => {
@@ -550,5 +550,189 @@ describe('image-batch config group', { timeout: 120_000 }, () => {
     expect(cli(['config', 'show', 'gone', '--plain']).status).toBe(0)
     expect(cli(['config', 'rm', 'gone', '--yes', '--plain']).status).toBe(0)
     expect(cli(['config', 'show', 'gone', '--plain']).stderr).toMatch(/config list/)
+  })
+})
+
+describe('image-batch sharpen presets', { timeout: 120_000 }, () => {
+  const presetPath = (scope: 'project' | 'global', name: string) =>
+    scope === 'project'
+      ? join(root, '.devtoolz', 'image-batch', 'sharpen', `${name}.json`)
+      : join(home, '.devtoolz', 'image-batch', 'sharpen', `${name}.json`)
+
+  it('creates, lists, shows and deletes a preset', () => {
+    const made = cli([
+      'sharpen',
+      'new',
+      '--name',
+      'crisp',
+      '--sharpen-for',
+      'glossy',
+      '--sharpen-amount',
+      'high',
+      '--sharpen-radius',
+      '1.2',
+      '--sharpen-threshold',
+      '4',
+      '--description',
+      'for print',
+      '--plain',
+    ])
+    expect(made.status).toBe(0)
+    expect(JSON.parse(readFileSync(presetPath('project', 'crisp'), 'utf8'))).toEqual({
+      description: 'for print',
+      for: 'glossy',
+      amount: 'high',
+      radius: 1.2,
+      threshold: 4,
+    })
+    const listed = cli(['sharpen', 'list', '--plain'])
+    expect(listed.stdout).toContain('crisp')
+    expect(listed.stdout).toContain('project')
+    expect(JSON.parse(cli(['sharpen', 'list', '--json']).stdout)[0]).toMatchObject({
+      name: 'crisp',
+      scope: 'project',
+      for: 'glossy',
+      radius: 1.2,
+    })
+    const shown = cli(['sharpen', 'show', 'crisp', '--plain'])
+    expect(shown.status).toBe(0)
+    expect(shown.stdout).toContain('sigma 1.2, flat 1.8, jagged 5, threshold 4')
+    expect(cli(['sharpen', 'rm', 'crisp', '--plain']).status).toBe(2)
+    expect(cli(['sharpen', 'rm', 'crisp', '--yes', '--plain']).status).toBe(0)
+    expect(existsSync(presetPath('project', 'crisp'))).toBe(false)
+    expect(cli(['sharpen', 'show', 'crisp', '--plain']).stderr).toMatch(/no sharpen preset/)
+  })
+
+  it('names the field and the range when a value is out of range', () => {
+    const bad = cli(['sharpen', 'new', '--name', 'x', '--sharpen-radius', '50', '--plain'])
+    expect(bad.status).toBe(2)
+    expect(bad.stderr).toContain('--sharpen-radius: expected a number from 0.000001 to 10')
+    const none = cli(['sharpen', 'new', '--name', 'x', '--plain'])
+    expect(none.status).toBe(2)
+    expect(none.stderr).toContain('needs at least one of --sharpen-for')
+  })
+
+  it('refuses to overwrite a preset without --force', () => {
+    cli(['sharpen', 'new', '--name', 'p', '--sharpen-for', 'screen', '--plain'])
+    const again = cli(['sharpen', 'new', '--name', 'p', '--sharpen-amount', 'low', '--plain'])
+    expect(again.status).toBe(2)
+    expect(again.stderr).toContain('already exists')
+    const forced = cli([
+      'sharpen',
+      'new',
+      '--name',
+      'p',
+      '--sharpen-amount',
+      'low',
+      '--force',
+      '--plain',
+    ])
+    expect(forced.status).toBe(0)
+    expect(JSON.parse(readFileSync(presetPath('project', 'p'), 'utf8'))).toEqual({ amount: 'low' })
+  })
+
+  it('uses a preset from --sharpen, from a config, and from the global folder', () => {
+    cli(['sharpen', 'new', '--name', 'local', '--sharpen-for', 'matte', '--plain'])
+    cli([
+      'sharpen',
+      'new',
+      '--name',
+      'everywhere',
+      '--global',
+      '--sharpen-amount',
+      'high',
+      '--plain',
+    ])
+    expect(existsSync(presetPath('global', 'everywhere'))).toBe(true)
+    const flag = cli(['img', '-r', '-o', 'out1', '-w', '40', '--sharpen', 'local', '--plain'])
+    expect(flag.status).toBe(0)
+    expect(existsSync(join(root, 'out1', 'a-40w.png'))).toBe(true)
+    const global = cli([
+      'img',
+      '-r',
+      '-o',
+      'out2',
+      '-w',
+      '40',
+      '--sharpen',
+      'everywhere',
+      '--plain',
+    ])
+    expect(global.status).toBe(0)
+    mkdirSync(join(root, '.devtoolz', 'image-batch'), { recursive: true })
+    writeFileSync(
+      join(root, '.devtoolz', 'image-batch', 'web.json'),
+      JSON.stringify({ outputs: [{ widths: [20], formats: ['png'], sharpen: 'local' }] }),
+    )
+    const viaConfig = cli(['img', '-o', 'out3', '-c', 'web', '--plain'])
+    expect(viaConfig.status).toBe(0)
+    expect(existsSync(join(root, 'out3', 'a-20w.png'))).toBe(true)
+    expect(cli(['config', 'show', 'web', '--plain']).status).toBe(0)
+  })
+
+  it('stops before writing when a named preset does not exist', () => {
+    cli(['sharpen', 'new', '--name', 'crisp', '--sharpen-for', 'screen', '--plain'])
+    const result = cli(['img', '-r', '-o', 'out', '-w', '40', '--sharpen', 'crsip', '--plain'])
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('no sharpen preset named "crsip"')
+    expect(result.stderr).toContain('crisp')
+    expect(existsSync(join(root, 'out'))).toBe(false)
+  })
+
+  it('redoes the results when the preset changes, and not otherwise', () => {
+    cli(['sharpen', 'new', '--name', 'p', '--sharpen-for', 'screen', '--plain'])
+    const args = ['img', '-r', '-o', 'out', '-w', '40', '--sharpen', 'p', '--overwrite', '--plain']
+    expect(cli(args).stdout).toContain('2 written')
+    expect(cli(args).stdout).toContain('2 up to date')
+    cli(['sharpen', 'new', '--name', 'p', '--sharpen-for', 'glossy', '--force', '--plain'])
+    expect(cli(args).stdout).toContain('2 written')
+  })
+
+  it('init stores a preset reference as a plain name', () => {
+    cli(['sharpen', 'new', '--name', 'crisp', '--sharpen-for', 'screen', '--plain'])
+    const made = cli(['init', '--name', 'web', '--sharpen', 'crisp', '--plain'])
+    expect(made.status).toBe(0)
+    const path = join(root, '.devtoolz', 'image-batch', 'web.json')
+    expect(JSON.parse(readFileSync(path, 'utf8')).outputs[0].sharpen).toBe('crisp')
+  })
+
+  it('prints the table when sharpen is run without a terminal', () => {
+    cli(['sharpen', 'new', '--name', 'mine', '--sharpen-for', 'matte', '--plain'])
+    const table = cli(['sharpen', '--plain']).stdout
+    expect(table).toContain('mine')
+    expect(table).toContain('project')
+    expect(table).toContain('web-crisp')
+    expect(table).toContain('built-in')
+  })
+
+  it('has built-in presets that work without creating anything', () => {
+    const listed = JSON.parse(cli(['sharpen', 'list', '--json']).stdout)
+    expect(listed.map((row: { name: string }) => row.name)).toEqual([
+      'web-light',
+      'web-crisp',
+      'web-detail',
+      'thumbnail',
+      'print-matte',
+      'print-glossy',
+    ])
+    expect(listed[0]).toMatchObject({ scope: 'built-in', for: 'screen', amount: 'low' })
+    const shown = cli(['sharpen', 'show', 'thumbnail', '--plain'])
+    expect(shown.status).toBe(0)
+    expect(shown.stdout).toContain('sigma 0.4, flat 0.6, jagged 2.5')
+    const run = cli(['img', '-r', '-o', 'out', '-w', '40', '--sharpen', 'print-glossy', '--plain'])
+    expect(run.status).toBe(0)
+    expect(existsSync(join(root, 'out', 'a-40w.png'))).toBe(true)
+  })
+
+  it('cannot delete a built-in preset, and a file of the same name replaces it', () => {
+    const rm = cli(['sharpen', 'rm', 'web-crisp', '--yes', '--plain'])
+    expect(rm.status).toBe(2)
+    expect(rm.stderr).toContain('built-in preset')
+    cli(['sharpen', 'new', '--name', 'web-crisp', '--sharpen-for', 'glossy', '--plain'])
+    const rows = JSON.parse(cli(['sharpen', 'list', '--json']).stdout).filter(
+      (row: { name: string }) => row.name === 'web-crisp',
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ scope: 'project', for: 'glossy' })
   })
 })

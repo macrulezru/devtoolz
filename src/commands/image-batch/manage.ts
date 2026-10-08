@@ -38,10 +38,13 @@ import {
 import { ImageBatchUsageError } from './errors.js'
 import { FIT_MODES } from './geometry.js'
 import { renderImageBatchReport } from './report.js'
+import { askSharpenFields } from './sharpen-ask.js'
+import { attachSharpenPresets, discoverSharpenPresets } from './sharpen-presets.js'
 import {
   SHARPEN_AMOUNTS,
-  SHARPEN_TARGETS,
-  type SharpenSpec,
+  describeSharpen,
+  type SharpenFields,
+  type SharpenLayer,
   type SharpenTarget,
 } from './sharpen.js'
 import { defaultTemplate } from './template.js'
@@ -95,7 +98,7 @@ function readRawJson(location: ConfigLocation): { raw: Raw; indent: number | str
   return { raw: parsed as Raw, indent: detectIndent(text) }
 }
 
-function validName(name: string): string {
+export function validName(name: string): string {
   const trimmed = name.trim()
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed)) {
     throw new ImageBatchUsageError(
@@ -113,7 +116,7 @@ export interface InitOptions {
   formats?: string[]
   quality?: string
   fileName?: string
-  sharpen?: Partial<SharpenSpec>
+  sharpen?: SharpenLayer
   thumbnail?: boolean
   hazehash?: boolean
   force?: boolean
@@ -129,7 +132,14 @@ export function buildStarterConfig(options: InitOptions, title: string): Raw {
       formats,
       ...(options.quality ? { quality: parseQualityArg(options.quality) } : { quality: 'high' }),
       ...(options.fileName ? { name: options.fileName } : {}),
-      ...(options.sharpen ? { sharpen: options.sharpen } : {}),
+      ...(options.sharpen
+        ? {
+            sharpen:
+              Object.keys(options.sharpen).length === 1 && options.sharpen.preset !== undefined
+                ? options.sharpen.preset
+                : options.sharpen,
+          }
+        : {}),
     },
   ]
   if (options.thumbnail) {
@@ -396,6 +406,14 @@ export async function runInit(env: ManageEnv, options: InitOptions): Promise<str
     if (chosen !== '' && chosen !== fallback) settings.fileName = chosen
   }
   if (interactive && options.sharpen === undefined) {
+    const presets = [
+      ...new Set(
+        discoverSharpenPresets({
+          cwd: env.cwd,
+          ...(env.globalDir !== undefined ? { globalDir: env.globalDir } : {}),
+        }).map((location) => location.name),
+      ),
+    ]
     const target = await singleSelect(
       env.io,
       [
@@ -403,11 +421,14 @@ export async function runInit(env: ManageEnv, options: InitOptions): Promise<str
         { label: 'screen', hint: 'light, for web and displays', value: 'screen' },
         { label: 'matte', hint: 'medium, for matte paper', value: 'matte' },
         { label: 'glossy', hint: 'strong, for glossy paper', value: 'glossy' },
+        ...presets.map((name) => ({ label: name, hint: 'saved preset', value: `preset:${name}` })),
       ],
       { title: 'Sharpen the results after resizing?', help: 'enter pick · q none' },
       s,
     )
-    if (target) {
+    if (target?.startsWith('preset:')) {
+      settings.sharpen = { preset: target.slice('preset:'.length) }
+    } else if (target) {
       const amount = await singleSelect(
         env.io,
         SHARPEN_AMOUNTS.map((value) => ({
@@ -568,9 +589,9 @@ function recipeSummary(layer: Raw): string {
     )
   }
   if (layer.fit) parts.push(`fit ${String(layer.fit)}`)
-  if (layer.sharpen && typeof layer.sharpen === 'object') {
-    const spec = layer.sharpen as { for?: string; amount?: string }
-    parts.push(`sharpen ${spec.for ?? 'screen'}/${spec.amount ?? 'standard'}`)
+  if (typeof layer.sharpen === 'string') parts.push(`sharpen ${layer.sharpen}`)
+  else if (layer.sharpen && typeof layer.sharpen === 'object') {
+    parts.push(`sharpen ${describeSharpen(layer.sharpen as SharpenLayer)}`)
   }
   return parts.join(' · ')
 }
@@ -625,7 +646,10 @@ export function describeConfigLines(config: BatchConfig, style: VibesOptions): s
 
 export async function showConfig(env: ManageEnv, location: ConfigLocation): Promise<void> {
   const raw = await readConfigSource(location)
-  const config = parseConfig(raw, location.name)
+  const config = attachSharpenPresets(parseConfig(raw, location.name), {
+    cwd: env.cwd,
+    ...(env.globalDir !== undefined ? { globalDir: env.globalDir } : {}),
+  })
   env.log(describeConfigLines(config, env.style).join('\n'))
 }
 
@@ -794,15 +818,41 @@ async function editField(
       return true
     }
     case 'sharpen': {
-      const target = await pickFrom(env, s, 'Sharpen for', SHARPEN_TARGETS, true)
-      if (target === null) return false
-      if (target === '') {
+      const how = await pickFrom(env, s, 'sharpen', ['preset', 'custom'], true)
+      if (how === null) return false
+      if (how === '') {
         set(undefined)
         return true
       }
-      const amount = await pickFrom(env, s, 'Sharpening amount', SHARPEN_AMOUNTS, false)
-      if (amount === null || amount === '') return false
-      set({ for: target, amount })
+      if (how === 'preset') {
+        const names = [
+          ...new Set(
+            discoverSharpenPresets({
+              cwd: env.cwd,
+              ...(env.globalDir !== undefined ? { globalDir: env.globalDir } : {}),
+            }).map((location) => location.name),
+          ),
+        ]
+        if (names.length === 0) {
+          env.log(
+            s.warn('No sharpen presets yet — create one with `devtoolz image-batch sharpen new`.'),
+          )
+          return false
+        }
+        const name = await pickFrom(env, s, 'Sharpen preset', names, false)
+        if (name === null || name === '') return false
+        set(name)
+        return true
+      }
+      const fields = await askSharpenFields(
+        env,
+        s,
+        typeof layer.sharpen === 'object' && layer.sharpen !== null
+          ? (layer.sharpen as SharpenFields)
+          : {},
+      )
+      if (fields === null) return false
+      set(fields)
       return true
     }
     case 'blur': {

@@ -29,11 +29,11 @@ import { FIT_MODES, type Fit } from './geometry.js'
 import { BATCH_IMAGE_EXTENSIONS } from './inputs.js'
 import { registerImageBatchManagement } from './manage-cli.js'
 import type { OverwriteMode } from './overwrite.js'
-import { parseSharpenFlags } from './sharpen.js'
+import { addSharpenFlags, parseSharpenFlags, type SharpenFlagOptions } from './sharpen.js'
 import { renderImageBatchReport } from './report.js'
 import { runImageBatch, type BatchOverrides } from './run.js'
 
-interface ImageBatchCliOptions {
+interface ImageBatchCliOptions extends SharpenFlagOptions {
   cwd: string
   config?: string
   out?: string
@@ -56,8 +56,6 @@ interface ImageBatchCliOptions {
   percent?: string
   matchOrientation: boolean
   maxSize?: string
-  sharpenFor?: string
-  sharpenAmount?: string
   formats?: string
   quality?: string
   codec: string[]
@@ -119,7 +117,7 @@ function overridesFrom(options: ImageBatchCliOptions): BatchOverrides | undefine
   if (options.percent) overrides.percent = parseDecimalList(options.percent, '--percent', 0.1, 1000)
   if (options.matchOrientation) overrides.matchOrientation = true
   if (options.maxSize) overrides.maxBytes = parseByteSize(options.maxSize, '--max-size')
-  const sharpen = parseSharpenFlags(options.sharpenFor, options.sharpenAmount)
+  const sharpen = parseSharpenFlags(options)
   if (sharpen) overrides.sharpen = sharpen
   if (options.formats) overrides.formats = splitList(options.formats)
   if (options.quality) overrides.quality = parseQualityArg(options.quality)
@@ -200,7 +198,7 @@ export function registerImageBatch(program: Command): void {
   const command = program
     .command('image-batch')
     .description(
-      'Batch-resize and convert raster images by rules: sizes, formats, codec options and file names from a config or flags (subcommands: init, config, restore)',
+      'Batch-resize and convert raster images by rules: sizes, formats, codec options and file names from a config or flags (subcommands: init, config, sharpen, restore)',
     )
     .argument('[paths...]', 'image files, folders and globs to process (several allowed)', [])
     .option('--cwd <path>', 'root paths are resolved against', process.cwd())
@@ -278,8 +276,6 @@ export function registerImageBatch(program: Command): void {
       '--max-size <size>',
       'limit each file to this size, e.g. 200KB or 1.5MB, by lowering the quality as far as needed',
     )
-    .option('--sharpen-for <target>', 'sharpen the result for: screen, matte or glossy')
-    .option('--sharpen-amount <amount>', 'sharpening amount: low, standard or high')
     .option(
       '-f, --formats <list>',
       'output formats: jpg, png, webp, avif, gif, tiff, jp2, heif or original',
@@ -356,6 +352,7 @@ export function registerImageBatch(program: Command): void {
     .option('--plain', 'disable color/banner/celebration copy, even in a real terminal', false)
     .option('--color', 'force colored output even when piped or in CI', false)
 
+  addSharpenFlags(command)
   command.action(async (paths: string[], options: ImageBatchCliOptions) => {
     const style = { plain: options.plain, color: options.color }
     const io = defaultTerminal()
