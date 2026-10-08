@@ -184,6 +184,17 @@ looking for is never touched.
 sharpen` saves such settings as presets that configs and `--sharpen <name>`
   use by name. Uses `sharp` too — see
   Requirements.
+- **`ui`** — starts a local web interface and opens it in the browser, so the
+  commands can be run with forms, tables, graphs and previews instead of
+  flags. Four modules: **Code checks** (eleven checks with an overview, every
+  finding opened next to its code with syntax highlighting, import cycles as a
+  graph), **Code cleanup** (removes comments or `console` calls with a diff you
+  approve file by file, a backup and an undo), **Image Hash** (a gallery of the
+  placeholders decoded next to each image) and **Image Batch** (convert, edit
+  configs and sharpening presets with a before and after preview, restore
+  backups). It is part of the package, listens on `127.0.0.1` only behind a
+  one-time token, and writes nothing without an explicit choice. `--port`,
+  `--no-open`, `--cwd`.
 - **`full-check`** — runs all thirteen other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
   (`strip-comments`/`console-strip`/`case-check`) are always called as a
@@ -312,6 +323,8 @@ devtoolz image-batch init                      # create a config with a few ques
 devtoolz image-batch config                    # pick a config: apply, show, edit, copy, delete
 devtoolz image-batch sharpen new               # save a sharpening preset, then --sharpen <name>
 
+devtoolz ui                                    # web interface for the checks, cleanup and images
+devtoolz ui --no-open --port 4477              # just print the address
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
 ```
