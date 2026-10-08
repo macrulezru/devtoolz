@@ -101,7 +101,12 @@ export function defaultSharpLoaderDeps(): SharpLoaderDeps {
 }
 
 export async function loadSharp(
-  options: { assumeYes?: boolean; cwd?: string },
+  options: {
+    assumeYes?: boolean
+    cwd?: string
+    command?: string
+    createError?: (message: string) => Error
+  },
   deps: SharpLoaderDeps = defaultSharpLoaderDeps(),
 ): Promise<SharpFactory> {
   const existing =
@@ -110,30 +115,31 @@ export async function loadSharp(
     deps.resolveManaged()
   if (existing) return existing
 
+  const command = options.command ?? 'image-hash'
+  const fail = (message: string): Error =>
+    options.createError ? options.createError(message) : new ImageHashUsageError(message)
   const manualHint = `Install it yourself with: npm install ${SHARP_SPEC}`
   if (!options.assumeYes) {
     if (!deps.interactive) {
-      throw new ImageHashUsageError(
-        `image-hash needs the "sharp" image library, and it is not installed. ` +
+      throw fail(
+        `${command} needs the "sharp" image library, and it is not installed. ` +
           `Run with --yes to let devtoolz install it into ${MANAGED_DEPS_DIR}. ${manualHint}`,
       )
     }
     const agreed = await deps.confirm(
-      `image-hash needs the "sharp" image library (native, ~30 MB). Install it into ${MANAGED_DEPS_DIR}?`,
+      `${command} needs the "sharp" image library (native, ~30 MB). Install it into ${MANAGED_DEPS_DIR}?`,
     )
     if (!agreed) {
-      throw new ImageHashUsageError(`"sharp" was not installed, nothing to do. ${manualHint}`)
+      throw fail(`"sharp" was not installed, nothing to do. ${manualHint}`)
     }
   }
 
   if (!deps.install()) {
-    throw new ImageHashUsageError(`Installing "sharp" failed. ${manualHint}`)
+    throw fail(`Installing "sharp" failed. ${manualHint}`)
   }
   const installed = deps.resolveManaged()
   if (!installed) {
-    throw new ImageHashUsageError(
-      `"sharp" was installed but could not be loaded on this platform. ${manualHint}`,
-    )
+    throw fail(`"sharp" was installed but could not be loaded on this platform. ${manualHint}`)
   }
   return installed
 }
