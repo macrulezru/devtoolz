@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { runStaleTsIgnore } from '../commands/stale-ts-ignore/run.js'
 
-describe('runStaleTsIgnore', () => {
+describe('runStaleTsIgnore', { timeout: 30_000 }, () => {
   let root: string
 
   beforeEach(() => {

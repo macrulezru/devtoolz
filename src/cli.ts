@@ -56,6 +56,7 @@ import {
   parseSampleSize,
   parseTypes,
 } from './commands/image-hash/core.js'
+import { registerImageBatch } from './commands/image-batch/cli.js'
 import { createStyle } from './format/style.js'
 
 interface HelpRow {
@@ -170,6 +171,7 @@ function formatCommandsHelp(commands: readonly Command[]): string {
 }
 
 const program = new Command()
+program.enablePositionalOptions()
 
 program
   .name('devtoolz')
@@ -1314,5 +1316,7 @@ program
       process.exitCode = report.exitCode
     },
   )
+
+registerImageBatch(program)
 
 program.parse(process.argv)
