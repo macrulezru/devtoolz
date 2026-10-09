@@ -15,8 +15,8 @@ import {
   newJournal,
   saveJournal,
   type JournalEntry,
-} from '../../image-batch/backup.js'
-import { runRestore } from '../../image-batch/restore.js'
+} from '../../../utils/backup.js'
+import { runRestore } from '../../../utils/restore.js'
 import { runConsoleStrip } from '../../console-strip/run.js'
 import { runStripComments } from '../../strip-comments/run.js'
 import { resolveUserPath } from '../fs-routes.js'

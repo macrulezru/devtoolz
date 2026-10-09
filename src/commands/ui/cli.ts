@@ -38,7 +38,7 @@ export function registerUi(program: Command): void {
   program
     .command('ui')
     .description(
-      'Start a local web interface for devtoolz modules (image-hash first) and open it in the browser',
+      'Start a local web interface for devtoolz modules (code checks and cleanup) and open it in the browser',
     )
     .option('--port <n>', 'port to listen on (0 = pick a free one)', '0')
     .option(

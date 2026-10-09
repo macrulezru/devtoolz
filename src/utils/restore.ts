@@ -1,13 +1,12 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { createStyle } from '../../format/style.js'
-import { formatBytes } from '../../format/bytes.js'
-import { banner, type VibesOptions } from '../../format/vibes.js'
-import { defaultTerminal, isInteractive, promptChoice, type TerminalIO } from '../../utils/tty.js'
+import { createStyle } from '../format/style.js'
+import type { VibesOptions } from '../format/vibes.js'
+import { writeAtomic } from './atomic-write.js'
 import { loadJournal } from './backup.js'
-import { ImageBatchUsageError } from './errors.js'
-import { writeAtomic } from './process.js'
+import { BackupUsageError } from './backup-error.js'
+import { defaultTerminal, isInteractive, promptChoice, type TerminalIO } from './tty.js'
 
 export type RestoreStatus =
   'restored' | 'would-restore' | 'modified' | 'missing-backup' | 'damaged-backup' | 'error'
@@ -64,8 +63,8 @@ export async function runRestore(options: RestoreOptions): Promise<RestoreReport
 
   if (!options.dryRun && !options.assumeYes) {
     if (!interactive) {
-      throw new ImageBatchUsageError(
-        'restore overwrites the current files with the saved originals — pass --yes to confirm (or --dry-run to preview)',
+      throw new BackupUsageError(
+        'restore overwrites the current files with the saved originals — confirm it first (or preview with a dry run)',
       )
     }
     const style = createStyle(options.style ?? {})
@@ -125,39 +124,4 @@ export async function runRestore(options: RestoreOptions): Promise<RestoreReport
     report.counts.error
   report.exitCode = failed > 0 ? 1 : 0
   return report
-}
-
-export function renderRestoreReport(report: RestoreReport, options: VibesOptions = {}): string {
-  const s = createStyle(options)
-  const lines: string[] = []
-  if (!options.quiet && !options.plain) lines.push(banner(options), '')
-  if (report.cancelled) return [...lines, s.info('Cancelled — nothing restored.')].join('\n')
-
-  const verb = report.dryRun ? 'would be restored' : 'restored'
-  const done = report.dryRun ? report.counts['would-restore'] : report.counts.restored
-  const total = report.results.length
-  lines.push(`${s.heading('Backup')} ${s.path(report.dir)}`, '')
-  for (const result of report.results) {
-    if (result.status === 'restored' || result.status === 'would-restore') continue
-    const reason: Record<RestoreStatus, string> = {
-      restored: '',
-      'would-restore': '',
-      modified: 'changed since it was replaced — left alone (use --force to restore anyway)',
-      'missing-backup': 'the backup copy is gone',
-      'damaged-backup': 'the backup copy does not match what was saved',
-      error: result.message ?? 'failed',
-    }
-    lines.push(`  ${s.path(result.path)} ${s.muted('—')} ${s.error(reason[result.status])}`)
-  }
-  if (lines.length > 2) lines.push('')
-  const sizes = report.results
-    .filter((r) => r.status === 'restored' || r.status === 'would-restore')
-    .reduce((sum, r) => sum + (r.bytes ?? 0), 0)
-  lines.push(
-    (done === total ? s.success : s.warn)(`${done} of ${total} ${verb}`) +
-      (sizes > 0 ? s.muted(` (${formatBytes(sizes)} of originals)`) : ''),
-  )
-  if (report.dryRun)
-    lines.push('', s.hint('(dry run — nothing written; drop --dry-run to restore)'))
-  return lines.join('\n')
 }

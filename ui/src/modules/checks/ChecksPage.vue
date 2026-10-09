@@ -420,7 +420,6 @@ onBeforeUnmount(() => stop?.())
     <FolderBrowser
       v-if="browsing"
       :start="project || status?.cwd || ''"
-      mode="folder"
       title="Choose the project folder"
       @close="browsing = false"
       @confirm="setProject"
