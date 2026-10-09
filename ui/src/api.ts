@@ -52,7 +52,7 @@ export interface StatusInfo {
 
 export interface FsEntry {
   name: string
-  kind: 'dir' | 'image'
+  kind: 'dir'
   size?: number
 }
 
@@ -65,10 +65,6 @@ export interface FsListing {
   roots: string[]
   entries: FsEntry[]
   truncated: boolean
-}
-
-export function imageUrl(path: string, size: number): string {
-  return `/api/fs/image?path=${encodeURIComponent(path)}&size=${size}`
 }
 
 export interface JobHandlers<P, R> {

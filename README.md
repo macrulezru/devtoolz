@@ -7,6 +7,11 @@ kind of thing you'd otherwise do with a half-remembered regex or by hand,
 right before a commit. One binary, one subcommand per chore, each safe by
 default (preview first, `-y` to actually write anything).
 
+> `image-hash` and `image-batch` moved to their own package in 0.5.0:
+> [`@macrulez/mediatoolz`](https://www.npmjs.com/package/@macrulez/mediatoolz)
+> (`npx @macrulez/mediatoolz image-batch …`). In devtoolz both commands only
+> print where they went and exit with code 2.
+
 Real AST parsing where it matters, not naive regex — a string, template
 literal, or regex literal that happens to _contain_ the text a command is
 looking for is never touched.
@@ -127,75 +132,14 @@ looking for is never touched.
   `.vue` files get an isolated per-file check (same technique as
   `readme-check`'s own virtual-file typechecking) — a plain
   `ts.Program` can't include `.vue` in a whole-project run at all.
-- **`image-hash`** — generates [hazehash](https://github.com/macrulezru/hazehash),
-  [blurhash](https://blurha.sh) and/or
-  [thumbhash](https://evanw.github.io/thumbhash/) placeholders for raster
-  images (jpg, png, webp, gif, avif, tiff). Takes files and/or
-  directories — several of each, comma-separated too — and `-r` walks
-  subdirectories. Prints to stdout by default; `-o <file>` collects
-  everything into one file, `--per-file` / `--out-dir <dir>` writes a
-  file per image (`photo.jpg` → `photo.jpg.blurhash.txt`, with
-  `--suffix` and `--out-ext` to rename). Formats: `json`, `plain` (just
-  the hash text, no newline), `csv`, and `ts`/`js` modules you can import
-  straight into the app. Without `-t` it makes blurhash and thumbhash; `-t hazehash` adds the
-  more compact and more accurate hazehash (`--budget` sets its size in
-  bytes, 28 by default). Besides the hashes it can produce the
-  dominant color and a tiny PNG preview (`-t all`), accepts `http(s)`
-  URLs and path lists from a file or stdin, and can keep an output file in
-  sync: `--cache` skips unchanged images, `--update --prune` merges into
-  the existing file, `--check` fails with exit code 1 when it is stale
-  (made for CI). `--dry-run` writes nothing and shows the result as a
-  table instead. Uses the native `sharp` library, which devtoolz
-  offers to install on first use — see Requirements.
-- **`image-batch`** — produces resized, converted and recompressed versions
-  of raster images in bulk, by rules kept in a reusable **config** or given
-  as flags: `widths`, `heights`, `size`, `longEdge` / `shortEdge` (the same for
-  landscape and portrait), `megapixels`, `percent`, `scale` (`@2x`),
-  `matchOrientation`, `maxBytes` (`--max-size 200KB` lowers the quality as far
-  as needed), `formats` (jpg,
-  png, webp, avif, gif, tiff, heif or `original`), `fit` (`inside`,
-  `cover`, `contain`, …), codec options (`quality` as a number or a level
-  `low`/`medium`/`high`/`best`, `mozjpeg`, a png `palette`, webp `lossless`,
-  avif `effort`, …) and file names from a template
-  (`{dir}/{name}-{width}w.{format}`, with `{ext}`, `{index:3}`, `{hash}`,
-  `{scale}`, `{date}`). The config holds only the rules; the folders are
-  chosen on every run. Where the results go is one of three: `-o <dir>` — a
-  separate folder that repeats the source structure (`--flat` drops it);
-  `--beside` — next to each source; `--replace` — over the sources
-  themselves, each in its own format, to shrink oversized originals or
-  recompress them in place. `--replace` is guarded: it asks for
-  confirmation (`--yes` without a terminal), copies the originals to
-  `.image-batch-backup/<date>/` first with a `journal.json`, replaces a file
-  only if the result is smaller, never processes the same file twice with
-  the same settings, and `--dry-run` shows the real before/after sizes;
-  `image-batch restore <backup>` puts the originals back. Without a size
-  flag it only converts the format. `-r` walks
-  subfolders, `-i/--select` ticks files from an interactive list, `--list`
-  only prints them. A result an earlier run already made is skipped; any
-  other existing file is a conflict — a terminal asks once (overwrite this
-  / this and all next / skip / skip all / quit), without a terminal it is
-  skipped with exit code 1, or use `--overwrite`, `--skip-existing`,
-  `--no-overwrite`. `--hazehash` (`--budget`), `--blurhash`, `--thumbhash`,
-  `--dominant-color` with `--emit <file>` write a manifest of everything
-  produced, with the placeholders. `init` creates configs, and `config` shows, edits,
-  copies and deletes them (`.devtoolz/image-batch/` in the project or
-  `~/.devtoolz/image-batch/` for all projects). `sharpen` adds output
-  sharpening after the resize — by target and amount, with `radius`,
-  `flat`, `jagged` and `threshold` for fine control — and `image-batch
-sharpen` saves such settings as presets that configs and `--sharpen <name>`
-  use by name. Uses `sharp` too — see
-  Requirements.
 - **`ui`** — starts a local web interface and opens it in the browser, so the
-  commands can be run with forms, tables, graphs and previews instead of
-  flags. Four modules: **Code checks** (eleven checks with an overview, every
-  finding opened next to its code with syntax highlighting, import cycles as a
-  graph), **Code cleanup** (removes comments or `console` calls with a diff you
-  approve file by file, a backup and an undo), **Image Hash** (a gallery of the
-  placeholders decoded next to each image) and **Image Batch** (convert, edit
-  configs and sharpening presets with a before and after preview, restore
-  backups). It is part of the package, listens on `127.0.0.1` only behind a
-  one-time token, and writes nothing without an explicit choice. `--port`,
-  `--no-open`, `--cwd`.
+  commands can be run with forms, tables and graphs instead of flags. Two
+  modules: **Code checks** (eleven checks with an overview, every finding
+  opened next to its code with syntax highlighting, import cycles as a graph)
+  and **Code cleanup** (removes comments or `console` calls with a diff you
+  approve file by file, a backup and an undo). It is part of the package,
+  listens on `127.0.0.1` only behind a one-time token, and writes nothing
+  without an explicit choice. `--port`, `--no-open`, `--cwd`.
 - **`full-check`** — runs all thirteen other commands in one sweep, each in
   its own safe read-only mode — the three that can write to disk
   (`strip-comments`/`console-strip`/`case-check`) are always called as a
@@ -214,11 +158,7 @@ only previews, `-y`/`--yes` is required to actually write anything,
 `unused-deps`, `circular-imports`, `exports-doctor`, `readme-check`,
 `empty-catch`, `todo-report`, `scripts-check`, `orphan-tests`,
 `stale-ts-ignore`, and `full-check` are all read-only — none of them ever
-write anything, there's nothing to preview or apply. `image-hash` writes
-files only when you name an output (`-o`, `--per-file`, `--out-dir`) and
-prints to stdout otherwise; `image-batch` writes into the folder given with
-`-o`, next to the sources with `--beside`, and over them only with
-`--replace` — after a confirmation, with a backup. Every command supports `--json` for
+write anything, there's nothing to preview or apply. Every command supports `--json` for
 machine-readable output.
 
 ## Tone
@@ -245,13 +185,6 @@ and without color — only escape codes are added.
 ## Requirements
 
 - Node.js 20+
-- `image-hash` and `image-batch` only: the [`sharp`](https://sharp.pixelplumbing.com)
-  image library. It ships prebuilt binaries for the common platforms and
-  is not installed with devtoolz — the first run of either offers to
-  install it into `~/.devtoolz/deps` (`-y` / `--yes` agrees up front, which
-  is also what you want in CI; without a terminal and without `--yes` the
-  command stops and says so). A `sharp` you already have installed
-  alongside devtoolz is used as-is.
 
 ## Installation
 
@@ -301,31 +234,7 @@ devtoolz orphan-tests src                      # test files whose source disappe
 
 devtoolz stale-ts-ignore                       # find @ts-ignore comments suppressing nothing
 
-devtoolz image-hash public/img                 # blurhash + thumbhash of every image, as JSON on stdout
-devtoolz image-hash public/img -r -t hazehash --budget 24 -o hashes.json   # hazehash of 24 bytes at most
-devtoolz image-hash a.jpg,b.png,photos -r -t blurhash -f csv -o hashes.csv
-devtoolz image-hash public/img -r -f plain --per-file   # photo.jpg.blurhash.txt + photo.jpg.thumbhash.txt
-devtoolz image-hash public/img -r -f ts -t thumbhash -o src/placeholders.ts --name placeholders
-devtoolz image-hash public/img -r --dry-run        # write nothing, show a table of the hashes
-devtoolz image-hash public/img -r -t all --components auto -o hashes.json --cache --update --prune
-devtoolz image-hash public/img -r -o hashes.json --check   # CI: exit 1 if hashes.json is stale
-
-devtoolz image-batch ./src/images -r -o ./public/images -w 400,800,1200 -f avif,webp,jpg -q high
-devtoolz image-batch ./photos -r -o ./out -c web             # apply the saved config "web"
-devtoolz image-batch ./photos -r -o ./out -c web --select    # tick the files from a list first
-devtoolz image-batch ./photos -r -o ./out -c web --dry-run   # show what would be written
-devtoolz image-batch ./photos -r -o ./out -c web --hazehash --budget 20 --emit ./out/images.json
-devtoolz image-batch ./photos -r -o ./out -f webp                   # only change the format, keep the size
-devtoolz image-batch ./photos -r -o ./out --long 1600 -f webp,jpg --max-size 200KB   # by long side, capped weight
-devtoolz image-batch ./assets -r --replace -w 1600 --dry-run    # preview shrinking originals in place
-devtoolz image-batch ./assets -r --replace -w 1600               # do it: backup first, asks to confirm
-devtoolz image-batch restore .image-batch-backup/20261007-233706  # put the originals back
-devtoolz image-batch ./photos -r --beside -w 400 -f webp         # results next to each source
-devtoolz image-batch init                      # create a config with a few questions
-devtoolz image-batch config                    # pick a config: apply, show, edit, copy, delete
-devtoolz image-batch sharpen new               # save a sharpening preset, then --sharpen <name>
-
-devtoolz ui                                    # web interface for the checks, cleanup and images
+devtoolz ui                                    # web interface for the checks and the cleanup
 devtoolz ui --no-open --port 4477              # just print the address
 devtoolz full-check                            # run every command, one summary table
 devtoolz full-check --skip stale-ts-ignore     # same, minus the expensive one
@@ -531,73 +440,6 @@ problems scattered across it:
 ✔ stale-ts-ignore   clean
 
 9 clean, 4 found something — see `devtoolz <command> --help` for full detail on any of them.
-```
-
-`devtoolz image-hash public/img -r -f plain --per-file` writing a text file
-per hash next to each image:
-
-```
-🧰 devtoolz
-
-Hashed 2 images.
-
-Wrote 4 files:
-  public/img/hero.jpg.blurhash.txt
-  public/img/hero.jpg.thumbhash.txt
-  public/img/logo.png.blurhash.txt
-  public/img/logo.png.thumbhash.txt
-```
-
-`devtoolz image-hash hero.jpg -t blurhash` printing JSON to stdout, ready to
-pipe or paste:
-
-```json
-{
-  "hero.jpg": {
-    "width": 1600,
-    "height": 900,
-    "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
-  }
-}
-```
-
-`devtoolz image-batch img -r -o out -w 300,600 -f webp,jpg -q high` resizing and
-converting two images (the status column is colored in a terminal):
-
-```
-2 images → out
-
-┌───────────┬─────────────────┬─────────┬─────────┬─────────┐
-│ Source    │ Output          │    Size │   Bytes │ Status  │
-├───────────┼─────────────────┼─────────┼─────────┼─────────┤
-│ a.png     │ a-300w.webp     │ 300×200 │   898 B │ written │
-│ a.png     │ a-600w.webp     │ 600×400 │ 2.37 KB │ written │
-│ a.png     │ a-300w.jpg      │ 300×200 │ 2.04 KB │ written │
-│ a.png     │ a-600w.jpg      │ 600×400 │ 4.13 KB │ written │
-│ sub/b.png │ sub/b-300w.webp │ 300×450 │ 1.76 KB │ written │
-│ sub/b.png │ sub/b-600w.webp │ 600×900 │ 4.45 KB │ written │
-│ sub/b.png │ sub/b-300w.jpg  │ 300×450 │ 4.12 KB │ written │
-│ sub/b.png │ sub/b-600w.jpg  │ 600×900 │ 9.63 KB │ written │
-└───────────┴─────────────────┴─────────┴─────────┴─────────┘
-
-8 written
-Wrote 8 files, 29.4 KB (the sources they came from: 240 KB).
-```
-
-`devtoolz image-hash public/img -r -t blurhash --dry-run` shows what would be
-generated as a table and writes nothing:
-
-```
-┌─────────────────────┬─────────┬──────────────────────────────┐
-│ File                │    Size │ BlurHash                     │
-├─────────────────────┼─────────┼──────────────────────────────┤
-│ public/img/blue.png │ 120×300 │ L704c9gSfQgSf:fRfQfRfQfQfQfQ │
-│ public/img/red.jpg  │ 200×100 │ L6T9R{,YfQ,Y|cjtfQjtfQfQfQfQ │
-└─────────────────────┴─────────┴──────────────────────────────┘
-
-Hashed 2 images.
-
-(dry run — nothing written)
 ```
 
 ## Development
