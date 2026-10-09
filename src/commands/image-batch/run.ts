@@ -86,6 +86,7 @@ export interface BatchOverrides {
   megapixels?: number[]
   percent?: number[]
   matchOrientation?: boolean
+  noResize?: boolean
   maxBytes?: number
   sharpen?: SharpenLayer
 }
@@ -236,6 +237,7 @@ function overrideLayer(overrides: BatchOverrides | undefined): RecipeLayer[] {
   if (overrides.megapixels) layer.megapixels = overrides.megapixels
   if (overrides.percent) layer.percent = overrides.percent
   if (overrides.matchOrientation) layer.matchOrientation = true
+  if (overrides.noResize) layer.noResize = true
   if (overrides.maxBytes !== undefined) layer.maxBytes = overrides.maxBytes
   if (overrides.sharpen) layer.sharpen = overrides.sharpen
   if (overrides.formats) {

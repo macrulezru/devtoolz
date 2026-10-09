@@ -61,6 +61,31 @@ describe('image-batch command line', { timeout: 120_000 }, () => {
     expect(result.stdout).toContain('2 written')
   })
 
+  it('converts only the format when no size is given', () => {
+    const result = cli(['img', '-o', 'out', '-f', 'webp', '--plain'])
+    expect(result.status).toBe(0)
+    expect(existsSync(join(root, 'out', 'a.webp'))).toBe(true)
+    expect(result.stdout).toContain('80×60')
+  })
+
+  it('--no-resize ignores the sizes of a config', () => {
+    mkdirSync(join(root, '.devtoolz', 'image-batch'), { recursive: true })
+    writeFileSync(
+      join(root, '.devtoolz', 'image-batch', 'sized.json'),
+      JSON.stringify({ outputs: [{ widths: [40], formats: ['webp'] }] }),
+    )
+    const result = cli(['img', '-c', 'sized', '-o', 'out', '--no-resize', '--plain'])
+    expect(result.status).toBe(0)
+    expect(existsSync(join(root, 'out', 'a.webp'))).toBe(true)
+    expect(existsSync(join(root, 'out', 'a-40w.webp'))).toBe(false)
+  })
+
+  it('--no-resize refuses to be combined with a size flag', () => {
+    const result = cli(['img', '-o', 'out', '-f', 'webp', '--no-resize', '-w', '40'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr + result.stdout).toContain('cannot be combined with --widths')
+  })
+
   it('applies a config by name, from the project folder', () => {
     mkdirSync(join(root, '.devtoolz', 'image-batch'), { recursive: true })
     writeFileSync(

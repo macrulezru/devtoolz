@@ -55,6 +55,7 @@ interface ImageBatchCliOptions extends SharpenFlagOptions {
   megapixels?: string
   percent?: string
   matchOrientation: boolean
+  resize: boolean
   maxSize?: string
   formats?: string
   quality?: string
@@ -107,6 +108,23 @@ function parseDecimalList(value: string, flag: string, min: number, max: number)
 
 function overridesFrom(options: ImageBatchCliOptions): BatchOverrides | undefined {
   const overrides: BatchOverrides = {}
+  if (!options.resize) {
+    const conflicting = [
+      ['--widths', options.widths],
+      ['--heights', options.heights],
+      ['--long', options.long],
+      ['--short', options.short],
+      ['--megapixels', options.megapixels],
+      ['--percent', options.percent],
+      ['--match-orientation', options.matchOrientation],
+    ].filter(([, value]) => value)
+    if (conflicting.length > 0) {
+      throw new ImageBatchUsageError(
+        `--no-resize keeps the original size, so it cannot be combined with ${conflicting.map(([flag]) => flag).join(', ')}`,
+      )
+    }
+    overrides.noResize = true
+  }
   if (options.widths) overrides.widths = parseNumberList(options.widths, '--widths')
   if (options.heights) overrides.heights = parseNumberList(options.heights, '--heights')
   if (options.long) overrides.longEdge = parseNumberList(options.long, '--long')
@@ -257,6 +275,10 @@ export function registerImageBatch(program: Command): void {
       'skip images whose path (inside the given folder) matches (repeatable)',
       (val, prev: string[]) => [...prev, val],
       [] as string[],
+    )
+    .option(
+      '--no-resize',
+      'keep the original size: ignore every size set in the config and only convert the format',
     )
     .option('-w, --widths <list>', 'output widths in pixels, comma-separated, e.g. 400,800,1200')
     .option('--heights <list>', 'output heights in pixels, comma-separated')

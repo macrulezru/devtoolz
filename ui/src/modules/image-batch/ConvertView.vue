@@ -84,7 +84,8 @@ const browsingOut = ref(false)
 
 const mode = ref<'quick' | 'config'>('quick')
 const configName = ref('')
-const sizeMethod = ref<SizeMethod>('widths')
+const resize = ref(false)
+const chosenMethod = ref<SizeMethod>('widths')
 const sizeValues = ref('800, 1600')
 const box = ref('1920x1080')
 const fit = ref('inside')
@@ -102,6 +103,10 @@ const failure = ref('')
 const report = ref<BatchReport>()
 let stopWatching: (() => void) | undefined
 
+const sizeMethod = computed<SizeMethod>(() => (resize.value ? chosenMethod.value : 'original'))
+const resizeMethods = computed(() =>
+  (options.value?.sizeMethods ?? []).filter((method) => method !== 'original'),
+)
 const separator = computed(() => (props.cwd.includes('\\') ? '\\' : '/'))
 const needsSharp = computed(() => failure.value.toLowerCase().includes('sharp'))
 const chosenConfig = computed(() => configs.value.find((row) => row.name === configName.value))
@@ -375,20 +380,26 @@ onBeforeUnmount(() => stopWatching?.())
       <template v-else-if="options">
         <div class="group">
           <h3>Size</h3>
-          <div class="grid">
+          <label class="check">
+            <input v-model="resize" type="checkbox" /> Resize the images
+          </label>
+          <p v-if="!resize" class="muted small">
+            The size does not change: the images are only converted to the chosen format.
+          </p>
+          <div v-if="resize" class="grid">
             <label class="field">
               <span>Method</span>
-              <select v-model="sizeMethod" class="select">
-                <option v-for="method in options.sizeMethods" :key="method" :value="method">
+              <select v-model="chosenMethod" class="select">
+                <option v-for="method in resizeMethods" :key="method" :value="method">
                   {{ METHOD_LABELS[method] }}
                 </option>
               </select>
             </label>
-            <label v-if="sizeMethod === 'size'" class="field">
+            <label v-if="resize && sizeMethod === 'size'" class="field">
               <span>Box (width × height)</span>
               <input v-model="box" class="input" spellcheck="false" placeholder="1920x1080" />
             </label>
-            <label v-else-if="sizeMethod !== 'original'" class="field">
+            <label v-else-if="resize" class="field">
               <span>Values</span>
               <input
                 v-model="sizeValues"
@@ -397,7 +408,7 @@ onBeforeUnmount(() => stopWatching?.())
                 :placeholder="METHOD_HINTS[sizeMethod]"
               />
             </label>
-            <label v-if="sizeMethod === 'size'" class="field">
+            <label v-if="resize && sizeMethod === 'size'" class="field">
               <span>How it fills the box</span>
               <select v-model="fit" class="select">
                 <option v-for="fitMode in options.fitModes" :key="fitMode" :value="fitMode">
@@ -410,7 +421,7 @@ onBeforeUnmount(() => stopWatching?.())
             <input v-model="matchOrientation" type="checkbox" /> Turn the box around for portrait
             images
           </label>
-          <p v-else-if="METHOD_HINTS[sizeMethod]" class="muted small">
+          <p v-else-if="resize && METHOD_HINTS[sizeMethod]" class="muted small">
             {{ METHOD_HINTS[sizeMethod] }}. Images are never enlarged.
           </p>
         </div>

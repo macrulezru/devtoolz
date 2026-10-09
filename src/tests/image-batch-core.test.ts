@@ -384,6 +384,20 @@ describe('config', () => {
     expect(() => resolveRecipe(loop, loop.outputs[0] ?? {})).toThrow(/loop/)
   })
 
+  it('noResize drops every size the config sets and keeps the original name', () => {
+    const config = parseConfig({
+      defaults: { widths: [100], scale: [1, 2] },
+      outputs: [{ longEdge: [800], percent: [50], formats: ['webp'] }],
+    })
+    const resolved = resolveRecipe(config, config.outputs[0] ?? {}, [{ noResize: true }])
+    expect(resolved.widths).toEqual([])
+    expect(resolved.longEdge).toEqual([])
+    expect(resolved.percent).toEqual([])
+    expect(resolved.scales).toEqual([1])
+    expect(resolved.template.text).toBe('{dir}/{name}.{format}')
+    expect(resolved.formats).toEqual(['webp'])
+  })
+
   it('rejects duplicate recipe ids', () => {
     expect(() => parseConfig({ outputs: [{ id: 'a' }, { id: 'a' }] })).toThrow(/used twice/)
   })

@@ -168,7 +168,8 @@ looking for is never touched.
   `.image-batch-backup/<date>/` first with a `journal.json`, replaces a file
   only if the result is smaller, never processes the same file twice with
   the same settings, and `--dry-run` shows the real before/after sizes;
-  `image-batch restore <backup>` puts the originals back. `-r` walks
+  `image-batch restore <backup>` puts the originals back. Without a size
+  flag it only converts the format. `-r` walks
   subfolders, `-i/--select` ticks files from an interactive list, `--list`
   only prints them. A result an earlier run already made is skipped; any
   other existing file is a conflict — a terminal asks once (overwrite this
@@ -314,6 +315,7 @@ devtoolz image-batch ./photos -r -o ./out -c web             # apply the saved c
 devtoolz image-batch ./photos -r -o ./out -c web --select    # tick the files from a list first
 devtoolz image-batch ./photos -r -o ./out -c web --dry-run   # show what would be written
 devtoolz image-batch ./photos -r -o ./out -c web --hazehash --budget 20 --emit ./out/images.json
+devtoolz image-batch ./photos -r -o ./out -f webp                   # only change the format, keep the size
 devtoolz image-batch ./photos -r -o ./out --long 1600 -f webp,jpg --max-size 200KB   # by long side, capped weight
 devtoolz image-batch ./assets -r --replace -w 1600 --dry-run    # preview shrinking originals in place
 devtoolz image-batch ./assets -r --replace -w 1600               # do it: backup first, asks to confirm
