@@ -119,6 +119,7 @@ export interface RecipeLayer extends CodecLayer {
   percent?: number[]
   scale?: number[]
   matchOrientation?: boolean
+  noResize?: boolean
   maxBytes?: number
   formats?: FormatChoice[]
   fit?: Fit
@@ -622,6 +623,17 @@ export function resolveRecipe(
         merged.sharpen = own.preset !== undefined ? expanded : { ...merged.sharpen, ...expanded }
       } else if (value !== undefined) (merged as Record<string, unknown>)[key] = value
     }
+  }
+  if (merged.noResize) {
+    delete merged.widths
+    delete merged.heights
+    delete merged.size
+    delete merged.longEdge
+    delete merged.shortEdge
+    delete merged.megapixels
+    delete merged.percent
+    delete merged.scale
+    delete merged.matchOrientation
   }
   const methods = [
     merged.widths,
